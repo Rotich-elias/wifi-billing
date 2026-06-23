@@ -15,6 +15,11 @@
                     <div>Duration: <strong>{{ $voucher->plan->duration_label }}</strong></div>
                 </div>
                 <hr>
+                <a href="{{ route('admin.vouchers.print', $voucher) }}" target="_blank"
+                   class="btn btn-sm btn-outline-dark w-100 mb-2">
+                    <i class="bi bi-printer"></i> Print PDF
+                </a>
+
                 @if($voucher->status === 'unused')
                 <div class="d-grid gap-2">
                     <form method="POST" action="{{ route('admin.vouchers.sync', $voucher) }}">

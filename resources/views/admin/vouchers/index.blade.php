@@ -29,7 +29,11 @@
                 <button type="submit" class="btn btn-sm btn-primary">Filter</button>
                 <a href="{{ route('admin.vouchers.index') }}" class="btn btn-sm btn-outline-secondary">Clear</a>
             </div>
-            <div class="col-auto ms-auto">
+            <div class="col-auto ms-auto d-flex gap-2">
+                <a href="{{ route('admin.vouchers.printFiltered', request()->only('status','plan_id')) }}"
+                   class="btn btn-sm btn-outline-dark" target="_blank">
+                    <i class="bi bi-printer"></i> Print View
+                </a>
                 <a href="{{ route('admin.vouchers.create') }}" class="btn btn-sm btn-success">
                     <i class="bi bi-plus-lg"></i> Generate Vouchers
                 </a>
@@ -45,8 +49,9 @@
             <div class="px-3 py-2 border-bottom d-flex align-items-center gap-2" id="bulkBar" style="display:none !important">
                 <span class="text-muted small" id="bulkCount">0 selected</span>
                 <select name="action" class="form-select form-select-sm w-auto">
-                    <option value="revoke">Revoke</option>
+                    <option value="print">Print PDF</option>
                     <option value="sync">Sync to MikroTik</option>
+                    <option value="revoke">Revoke</option>
                     <option value="delete">Delete</option>
                 </select>
                 <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Apply bulk action?')">Apply</button>

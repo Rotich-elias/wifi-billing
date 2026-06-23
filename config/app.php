@@ -13,7 +13,10 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    'name'              => env('APP_NAME', 'Laravel'),
+    'business_name'     => env('BUSINESS_NAME', env('APP_NAME', 'WiFi Hotspot')),
+    'business_phone'    => env('BUSINESS_PHONE', ''),
+    'business_location' => env('BUSINESS_LOCATION', ''),
 
     /*
     |--------------------------------------------------------------------------

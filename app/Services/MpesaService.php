@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Jobs\SendVoucherSms;
+use App\Jobs\SyncVoucherToMikrotik;
 use App\Models\Payment;
 use App\Models\Voucher;
 use Exception;
@@ -124,7 +126,8 @@ class MpesaService
             $voucher->customer_phone = $meta['PhoneNumber'] ?? $payment->phone;
             $voucher->save();
 
-            app(MikrotikService::class)->syncVoucher($voucher, 'add');
+            SyncVoucherToMikrotik::dispatch($voucher, 'add');
+            SendVoucherSms::dispatch($voucher);
         } else {
             $payment->update([
                 'status'      => 'failed',

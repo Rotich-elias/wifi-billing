@@ -28,6 +28,13 @@
                 <div class="form-text">Maximum 500 at once.</div>
                 @error('quantity')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
+            <div class="mb-3 form-check">
+                <input type="checkbox" name="print_after" value="1" id="print_after" class="form-check-input"
+                       {{ old('print_after') ? 'checked' : '' }}>
+                <label for="print_after" class="form-check-label">
+                    <i class="bi bi-printer"></i> Open PDF immediately after generating
+                </label>
+            </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-success">
                     <i class="bi bi-ticket-perforated"></i> Generate

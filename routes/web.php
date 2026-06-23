@@ -26,6 +26,9 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::resource('vouchers', VoucherController::class);
     Route::post('vouchers/{voucher}/sync', [VoucherController::class, 'syncMikrotik'])->name('vouchers.sync');
     Route::post('vouchers/bulk', [VoucherController::class, 'bulkAction'])->name('vouchers.bulk');
+    Route::get('vouchers/{voucher}/print', [VoucherController::class, 'printSingle'])->name('vouchers.print');
+    Route::get('vouchers/print/batch', [VoucherController::class, 'printBatch'])->name('vouchers.printBatch');
+    Route::get('vouchers/print/filtered', [VoucherController::class, 'printFiltered'])->name('vouchers.printFiltered');
 
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
     Route::get('payments/{payment}', [PaymentController::class, 'show'])->name('payments.show');

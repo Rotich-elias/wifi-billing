@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Jobs\ExpireVoucherJob;
+use App\Jobs\SyncVoucherToMikrotik;
 use App\Models\Plan;
 use App\Models\Voucher;
 use Illuminate\Support\Collection;
@@ -30,8 +32,7 @@ class VoucherService
         Voucher::where('status', 'active')
             ->where('expires_at', '<', now())
             ->each(function (Voucher $voucher) use (&$count) {
-                $voucher->update(['status' => 'expired']);
-                app(MikrotikService::class)->syncVoucher($voucher, 'remove');
+                ExpireVoucherJob::dispatch($voucher);
                 $count++;
             });
 
@@ -43,7 +44,7 @@ class VoucherService
         $voucher->update(['status' => 'revoked']);
 
         if ($voucher->mikrotik_synced) {
-            app(MikrotikService::class)->syncVoucher($voucher, 'remove');
+            SyncVoucherToMikrotik::dispatch($voucher, 'remove');
         }
     }
 }
