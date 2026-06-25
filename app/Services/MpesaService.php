@@ -125,6 +125,7 @@ class MpesaService
             $voucher = $payment->voucher;
             $voucher->customer_phone = $meta['PhoneNumber'] ?? $payment->phone;
             $voucher->save();
+            $voucher->activate();
 
             SyncVoucherToMikrotik::dispatch($voucher, 'add');
             SendVoucherSms::dispatch($voucher);
