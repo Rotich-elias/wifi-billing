@@ -33,7 +33,7 @@
         position: absolute;
         top: 0; left: 0;
         width: 100%; height: 5px;
-        background: repeating-linear-gradient(90deg, #4f46e5 0, #4f46e5 8px, transparent 8px, transparent 14px);
+        background: repeating-linear-gradient(90deg, #1173b8 0, #1173b8 8px, transparent 8px, transparent 14px);
     }
 
     .header {
@@ -44,6 +44,7 @@
         margin-top: 3mm;
     }
 
+    .brand-logo { width: 11mm; height: 11mm; margin-bottom: 1mm; }
     .business { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
     .plan-name { font-size: 13px; font-weight: bold; color: #1a1a1a; margin: 1mm 0; }
     .duration { font-size: 9px; color: #777; }
@@ -57,7 +58,7 @@
         margin: 3mm 0;
     }
     .code-label { font-size: 7px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
-    .code { font-size: 18px; font-weight: bold; color: #4f46e5; letter-spacing: 2px; font-family: "Courier New", monospace; }
+    .code { font-size: 18px; font-weight: bold; color: #1173b8; letter-spacing: 2px; font-family: "Courier New", monospace; }
 
     .details { font-size: 8px; color: #555; margin-top: 2mm; }
     .details table { width: 100%; }
@@ -75,7 +76,7 @@
 
     .price-badge {
         display: inline-block;
-        background: #4f46e5;
+        background: #1173b8;
         color: #fff;
         border-radius: 10px;
         padding: 1px 6px;
@@ -95,6 +96,7 @@
             <td>
                 <div class="voucher">
                     <div class="header">
+                        <img src="{{ public_path('images/kirwa-net-mark-160.jpg') }}" alt="" class="brand-logo">
                         <div class="business">{{ config('app.business_name', config('app.name')) }}</div>
                         <div class="plan-name">{{ $voucher->plan->name }}</div>
                         <div class="duration">{{ $voucher->plan->duration_label }} &bull; ↓{{ $voucher->plan->bandwidth_down }}</div>

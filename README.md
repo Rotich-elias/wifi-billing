@@ -31,6 +31,14 @@ npm run build
 login page use those local assets. They do not load Bootstrap or icons from a
 CDN, because a pre-login hotspot client has no internet access yet.
 
+### Branding
+
+The Kirwa Net mark and lockup live in `public/images/`; favicons, the Apple
+touch icon and `site.webmanifest` are at the root of `public/`. The name shown
+next to the logo comes from `APP_NAME`, and the voucher PDF uses
+`BUSINESS_NAME`. To rebrand, replace those files in place (keep the filenames)
+and update the two environment values.
+
 The seeder creates the admin account from `ADMIN_EMAIL` / `ADMIN_PASSWORD`. If
 `ADMIN_PASSWORD` is empty it generates one and prints it once.
 

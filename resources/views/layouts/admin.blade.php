@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Admin') — WiFi Billing</title>
+    <title>@yield('title', 'Admin') — {{ config('app.name') }}</title>
+    @include('partials.favicon')
     @vite(['resources/sass/app.scss', 'resources/js/app.js'])
     <style>
         .sidebar { width: 240px; min-height: 100vh; background: #1a1a2e; }
@@ -25,7 +26,8 @@
 <div class="d-flex">
     <div class="sidebar d-flex flex-column py-3">
         <a href="{{ route('admin.dashboard') }}" class="sidebar-brand text-decoration-none px-4 pb-3 d-flex align-items-center gap-2">
-            <i class="bi bi-wifi fs-5"></i> WiFi Billing
+            <img src="/images/kirwa-net-mark.png" alt="" width="32" height="32" class="flex-shrink-0">
+            <span>{{ config('app.name') }}</span>
         </a>
         <hr class="border-secondary my-1">
         <nav class="nav flex-column gap-1 mt-2">

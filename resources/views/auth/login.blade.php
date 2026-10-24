@@ -4,19 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Admin Login — WiFi Billing</title>
+    <title>Admin Login — {{ config('app.name') }}</title>
+    @include('partials.favicon')
     @vite(['resources/sass/app.scss', 'resources/js/app.js'])
     <style>
-        body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; }
+        body { background: linear-gradient(135deg, #071f3f 0%, #0b2e59 60%, #1173b8 100%); min-height: 100vh; }
     </style>
 </head>
 <body class="d-flex align-items-center justify-content-center">
-    <div class="card border-0 shadow-lg" style="width: 380px; border-radius: 16px;">
+    <div class="card border-0 shadow-lg bg-white" style="width: 380px; border-radius: 16px;">
         <div class="card-body p-5">
             <div class="text-center mb-4">
-                <i class="bi bi-wifi fs-1 text-primary"></i>
-                <h4 class="fw-bold mt-2">WiFi Billing</h4>
-                <p class="text-muted small">Admin Login</p>
+                <h1 class="visually-hidden">{{ config('app.name') }} Admin Login</h1>
+                <img src="/images/kirwa-net-logo.png" alt="{{ config('app.name') }} — Fast. Reliable. Wi-Fi."
+                     class="img-fluid mb-3" style="max-width: 175px;">
+                <p class="text-muted small mb-0">Admin Login</p>
             </div>
 
             @if ($errors->any())
