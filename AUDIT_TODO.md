@@ -21,11 +21,9 @@
 
 ## P0 — Stop the bleeding
 
-- [ ] **P0-09 🟠 Rotate potentially exposed secrets** — app-side done, provider-side pending
+- [ ] **P0-09 🟠 Rotate potentially exposed secrets** — provider-side rotation pending
   - Where: `.env` (M-Pesa, MikroTik, Africa's Talking)
   - Problem: debug mode was enabled on a public URL, so treat integration secrets as potentially leaked.
-  - [x] Rotate `APP_KEY`
-  - [x] Generate a new `MPESA_CALLBACK_SECRET`
   - [ ] Rotate the M-Pesa consumer key/secret/passkey in the Daraja portal
   - [ ] Rotate the MikroTik API password and create a least-privilege API user
   - [ ] Rotate the Africa's Talking API key
@@ -97,18 +95,10 @@
 
 ---
 
-## Definition of done (release gate)
+## Outstanding release gate
 
-All P0 and P1 items checked, plus:
-
-- [x] `composer audit` → 0 advisories
-- [x] `php artisan test` → all green
 - [ ] `APP_ENV=production`, `APP_DEBUG=false`, real HTTPS `APP_URL`
-- [x] Default admin credentials invalid; admin authorization enforced
-- [x] Anonymous voucher enumeration returns no data
-- [x] Callback: wrong amount rejected, duplicate/replay is a no-op
 - [ ] Expired/revoked/deleted vouchers are removed from MikroTik
-- [x] Payment history survives every delete path
 - [ ] Scheduler + queue worker running with alerting
 - [ ] Backups and restore drill completed
 
