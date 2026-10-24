@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncVoucherToMikrotik;
 use App\Models\Payment;
 use App\Services\MpesaService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
@@ -13,7 +15,7 @@ class PaymentController extends Controller
 
     public function index(Request $request)
     {
-        $query = Payment::with('voucher.plan')->latest();
+        $query = Payment::with('plan', 'voucher.plan')->latest();
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -21,7 +23,8 @@ class PaymentController extends Controller
         if ($request->filled('search')) {
             $query->where(function ($q) use ($request) {
                 $q->where('phone', 'like', '%'.$request->search.'%')
-                    ->orWhere('mpesa_receipt', 'like', '%'.$request->search.'%');
+                    ->orWhere('mpesa_receipt', 'like', '%'.$request->search.'%')
+                    ->orWhere('checkout_request_id', 'like', '%'.$request->search.'%');
             });
         }
         if ($request->filled('date_from')) {
@@ -34,10 +37,10 @@ class PaymentController extends Controller
         $payments = $query->paginate(20)->withQueryString();
 
         $summary = [
-            'total' => Payment::where('status', 'completed')->sum('amount'),
-            'today' => Payment::where('status', 'completed')->whereDate('paid_at', today())->sum('amount'),
-            'pending' => Payment::where('status', 'pending')->count(),
-            'failed' => Payment::where('status', 'failed')->count(),
+            'total' => Payment::where('status', Payment::STATUS_PAID)->sum('amount'),
+            'today' => Payment::where('status', Payment::STATUS_PAID)->whereDate('paid_at', today())->sum('amount'),
+            'pending' => Payment::where('status', Payment::STATUS_PENDING)->count(),
+            'failed' => Payment::where('status', Payment::STATUS_FAILED)->count(),
         ];
 
         return view('admin.payments.index', compact('payments', 'summary'));
@@ -45,35 +48,39 @@ class PaymentController extends Controller
 
     public function show(Payment $payment)
     {
-        $payment->load('voucher.plan');
+        $payment->load('plan', 'voucher.plan');
 
         return view('admin.payments.show', compact('payment'));
     }
 
-    public function queryStatus(Payment $payment)
+    public function queryStatus(Payment $payment): RedirectResponse
     {
-        $result = $this->mpesa->querySTKStatus($payment);
-
-        $responseCode = $result['ResultCode'] ?? null;
-
-        if ($responseCode === 0 || $responseCode === '0') {
-            $completed = $this->mpesa->completePayment($payment, [
-                'MpesaReceiptNumber' => $result['MpesaReceiptNumber'] ?? null,
-            ], raw: $result);
-
-            return back()->with('info', $completed
-                ? 'Status checked: payment completed and voucher activated.'
-                : 'Status checked: payment was already processed.');
+        try {
+            $this->mpesa->reconcilePendingPayment($payment);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Status check failed: '.$e->getMessage());
         }
 
-        if ($payment->status === 'pending' && in_array((string) $responseCode, ['1032', '1037'], true)) {
-            $payment->update([
-                'status' => 'failed',
-                'result_code' => (string) $responseCode,
-                'result_desc' => $result['ResultDesc'] ?? null,
-            ]);
+        $payment->refresh();
+
+        return back()->with('info', match ($payment->status) {
+            Payment::STATUS_PAID => 'Payment confirmed and voucher created.',
+            Payment::STATUS_FAILED => 'Payment failed: '.($payment->result_desc ?? 'no reason given'),
+            Payment::STATUS_EXPIRED => 'Payment expired.',
+            default => 'Payment is still pending.',
+        });
+    }
+
+    public function retryProvisioning(Payment $payment): RedirectResponse
+    {
+        $voucher = $payment->voucher;
+
+        if (! $voucher) {
+            return back()->with('error', 'This payment has no voucher yet.');
         }
 
-        return back()->with('info', 'Status checked: '.($result['ResultDesc'] ?? 'No response'));
+        SyncVoucherToMikrotik::dispatch($voucher, 'add');
+
+        return back()->with('success', "Provisioning queued for voucher {$voucher->code}.");
     }
 }

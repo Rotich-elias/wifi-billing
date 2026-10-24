@@ -12,7 +12,11 @@ use Illuminate\Support\Str;
 
 class VoucherService
 {
-    public function generate(Plan $plan, int $quantity = 1): Collection
+    /**
+     * Generate vouchers. Printed vouchers stay unused until a customer pays;
+     * support vouchers can be activated immediately.
+     */
+    public function generate(Plan $plan, int $quantity = 1, bool $activate = false): Collection
     {
         $batchId = Str::uuid()->toString();
         $vouchers = collect();
@@ -22,15 +26,24 @@ class VoucherService
 
             while (true) {
                 try {
-                    $vouchers->push(Voucher::create([
+                    $voucher = Voucher::create([
                         'plan_id' => $plan->id,
                         'batch_id' => $batchId,
-                    ]));
+                    ]);
+
+                    if ($activate) {
+                        $voucher->activate();
+                        SyncVoucherToMikrotik::dispatch($voucher, 'add');
+                    }
+
+                    $vouchers->push($voucher);
 
                     break;
                 } catch (QueryException $e) {
                     // Extremely unlikely code collision: retry with a new code.
-                    if (++$attempts >= 5 || ! str_contains($e->getMessage(), 'UNIQUE')) {
+                    $message = strtolower($e->getMessage());
+
+                    if (++$attempts >= 5 || (! str_contains($message, 'unique') && ! str_contains($message, 'duplicate'))) {
                         throw $e;
                     }
                 }

@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Contracts\RouterDriver;
+use App\Services\MikrotikService;
+use App\Services\Router\MockRouterDriver;
+use App\Services\Router\RouterOsApiDriver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -14,7 +18,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(RouterDriver::class, function ($app) {
+            if (config('router.driver') === 'routeros') {
+                return new RouterOsApiDriver($app->make(MikrotikService::class));
+            }
+
+            return new MockRouterDriver;
+        });
     }
 
     /**

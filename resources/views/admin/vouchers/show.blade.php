@@ -22,12 +22,9 @@
 
                 @if($voucher->status === 'unused')
                 <div class="d-grid gap-2">
-                    <form method="POST" action="{{ route('admin.vouchers.sync', $voucher) }}">
-                        @csrf
-                        <button class="btn btn-sm btn-outline-primary w-100">
-                            <i class="bi bi-arrow-repeat"></i> Push to MikroTik
-                        </button>
-                    </form>
+                    <div class="alert alert-secondary small mb-0">
+                        Unused vouchers stay off the router until a payment activates them.
+                    </div>
                     <form method="POST" action="{{ route('admin.vouchers.destroy', $voucher) }}"
                           onsubmit="return confirm('Revoke this voucher?')">
                         @csrf @method('DELETE')
@@ -36,7 +33,14 @@
                         </button>
                     </form>
                 </div>
-                @elseif($voucher->status === 'active')
+                @elseif($voucher->status === 'active' && ! $voucher->mikrotik_synced)
+                <form method="POST" action="{{ route('admin.vouchers.sync', $voucher) }}">
+                    @csrf
+                    <button class="btn btn-sm btn-outline-primary w-100">
+                        <i class="bi bi-arrow-repeat"></i> Retry Provisioning
+                    </button>
+                </form>
+                @elseif($voucher->mikrotik_synced)
                 <form method="POST" action="{{ route('admin.vouchers.sync', $voucher) }}">
                     @csrf
                     <button class="btn btn-sm btn-outline-warning w-100">
@@ -59,12 +63,15 @@
                     <dd class="col-7">{{ $voucher->activated_at?->format('d M Y H:i') ?? '—' }}</dd>
                     <dt class="col-5 text-muted">Expires</dt>
                     <dd class="col-7">{{ $voucher->expires_at?->format('d M Y H:i') ?? '—' }}</dd>
-                    <dt class="col-5 text-muted">MikroTik</dt>
+                    <dt class="col-5 text-muted">Router</dt>
                     <dd class="col-7">
                         @if($voucher->mikrotik_synced)
-                            <span class="text-success"><i class="bi bi-check-circle-fill"></i> Synced</span>
+                            <span class="text-success"><i class="bi bi-check-circle-fill"></i> Provisioned</span>
                         @else
-                            <span class="text-secondary">Not synced</span>
+                            <span class="text-secondary">Not provisioned</span>
+                        @endif
+                        @if($voucher->provisioning_error)
+                        <div class="small text-danger mt-1">{{ $voucher->provisioning_error }}</div>
                         @endif
                     </dd>
                     <dt class="col-5 text-muted">Batch</dt>

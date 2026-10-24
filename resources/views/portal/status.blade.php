@@ -2,10 +2,14 @@
 @section('title', 'Voucher Status')
 
 @section('content')
+@php($provisioned = $voucher->isProvisioned())
 <div class="text-center mb-3">
-    @if($voucher->status === 'active')
+    @if($voucher->status === 'active' && $provisioned)
         <span class="display-4">✅</span>
         <h5 class="fw-bold mt-2">You're Online!</h5>
+    @elseif($voucher->status === 'active')
+        <span class="display-4">⏳</span>
+        <h5 class="fw-bold mt-2">Activating Your Voucher</h5>
     @elseif($voucher->status === 'expired')
         <span class="display-4">⌛</span>
         <h5 class="fw-bold mt-2">Voucher Expired</h5>
@@ -19,7 +23,14 @@
 </div>
 
 <div class="bg-light rounded p-3 mb-3">
+    @if($provisioned)
     <div class="text-center font-monospace fs-4 fw-bold text-primary mb-2">{{ $voucher->code }}</div>
+    @else
+    <div class="text-center text-muted small mb-2">
+        Your code will appear here once it is active on the WiFi router.
+    </div>
+    @endif
+
     <div class="row small g-1">
         <div class="col-5 text-muted">Plan</div>
         <div class="col-7">{{ $voucher->plan->name }}</div>
@@ -54,7 +65,13 @@
 </div>
 @endif
 
-@if($voucher->status === 'active')
+@if($voucher->status === 'active' && ! $provisioned)
+<div class="alert alert-info small">
+    <i class="bi bi-hourglass-split"></i> Payment received. Your WiFi user is being created. Refresh this page in a moment.
+</div>
+@endif
+
+@if($provisioned)
 <div class="alert alert-success small">
     <strong>WiFi Login:</strong><br>
     Username: <code>{{ $voucher->code }}</code><br>

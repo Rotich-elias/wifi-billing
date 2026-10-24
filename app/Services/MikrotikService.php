@@ -8,7 +8,7 @@ use Exception;
 
 class MikrotikService
 {
-    private $socket;
+    private $socket = null;
 
     private bool $connected = false;
 
@@ -30,8 +30,13 @@ class MikrotikService
 
     public function connect(): bool
     {
+        if ($this->connected) {
+            $this->disconnect();
+        }
+
         $this->socket = @fsockopen($this->host, $this->port, $errno, $errstr, 10);
         if (! $this->socket) {
+            $this->socket = null;
             throw new Exception("Cannot connect to MikroTik: {$errstr} ({$errno})");
         }
         stream_set_timeout($this->socket, 10);
@@ -52,10 +57,12 @@ class MikrotikService
 
     public function disconnect(): void
     {
-        if ($this->socket) {
+        if (is_resource($this->socket)) {
             fclose($this->socket);
-            $this->connected = false;
         }
+
+        $this->socket = null;
+        $this->connected = false;
     }
 
     public function addHotspotUser(Voucher $voucher): array
@@ -70,7 +77,14 @@ class MikrotikService
             '=server='.$server,
             '=profile='.$this->getOrCreateProfile($plan),
             '=comment=voucher_id:'.$voucher->id,
+            '=limit-uptime='.$this->secondsToMikrotik(
+                $plan->session_timeout ?: ((int) $plan->duration_hours * 3600)
+            ),
         ];
+
+        if ($plan->data_limit) {
+            $command[] = '=limit-bytes-total='.$this->dataLimitToBytes($plan->data_limit);
+        }
 
         if ($voucher->customer_name) {
             $command[] = '=name-for-mgmt='.$voucher->customer_name;
@@ -303,6 +317,27 @@ class MikrotikService
         $s = $seconds % 60;
 
         return sprintf('%02d:%02d:%02d', $h, $m, $s);
+    }
+
+    /**
+     * RouterOS API expects limit-bytes-total in bytes, while admins enter
+     * human-readable values such as 500M or 5G.
+     */
+    private function dataLimitToBytes(string $limit): int
+    {
+        if (! preg_match('/^\s*([0-9]+(?:\.[0-9]+)?)\s*([kKmMgGtT])?\s*$/', $limit, $matches)) {
+            throw new Exception("Invalid data limit format: {$limit}");
+        }
+
+        $multiplier = match (strtoupper($matches[2] ?? '')) {
+            'K' => 1024,
+            'M' => 1024 ** 2,
+            'G' => 1024 ** 3,
+            'T' => 1024 ** 4,
+            default => 1,
+        };
+
+        return (int) round((float) $matches[1] * $multiplier);
     }
 
     public function syncVoucher(Voucher $voucher, string $action = 'add'): bool

@@ -12,19 +12,32 @@
                 <span class="badge bg-{{ $payment->status_badge }} fs-6">{{ strtoupper($payment->status) }}</span>
                 <div class="fs-4 fw-bold mt-1">KES {{ number_format($payment->amount, 2) }}</div>
             </div>
-            @if($payment->status === 'pending')
-            <form method="POST" action="{{ route('admin.payments.query', $payment) }}">
-                @csrf
-                <button class="btn btn-outline-warning btn-sm">
-                    <i class="bi bi-arrow-repeat"></i> Re-check Status
-                </button>
-            </form>
-            @endif
+            <div class="d-flex gap-2">
+                @if($payment->status === 'pending')
+                <form method="POST" action="{{ route('admin.payments.query', $payment) }}">
+                    @csrf
+                    <button class="btn btn-outline-warning btn-sm">
+                        <i class="bi bi-arrow-repeat"></i> Re-check Status
+                    </button>
+                </form>
+                @endif
+                @if($payment->voucher && ! $payment->voucher->mikrotik_synced)
+                <form method="POST" action="{{ route('admin.payments.provision', $payment) }}">
+                    @csrf
+                    <button class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-router"></i> Retry Provisioning
+                    </button>
+                </form>
+                @endif
+            </div>
         </div>
 
         <dl class="row">
             <dt class="col-sm-4 text-muted">Phone</dt>
             <dd class="col-sm-8">{{ $payment->phone }}</dd>
+
+            <dt class="col-sm-4 text-muted">Plan</dt>
+            <dd class="col-sm-8">{{ $payment->plan?->name ?? $payment->voucher?->plan?->name ?? '—' }}</dd>
 
             <dt class="col-sm-4 text-muted">Voucher</dt>
             <dd class="col-sm-8">
@@ -32,10 +45,34 @@
                 <a href="{{ route('admin.vouchers.show', $payment->voucher) }}" class="font-monospace">
                     {{ $payment->voucher->code }}
                 </a>
-                — {{ $payment->voucher->plan->name }}
                 @else —
                 @endif
             </dd>
+
+            <dt class="col-sm-4 text-muted">Router status</dt>
+            <dd class="col-sm-8">
+                @if($payment->voucher?->mikrotik_synced)
+                    <span class="badge bg-success">Active on router</span>
+                @elseif($payment->voucher)
+                    <span class="badge bg-warning text-dark">Not provisioned</span>
+                    @if($payment->voucher->provisioning_error)
+                    <div class="small text-danger mt-1">{{ $payment->voucher->provisioning_error }}</div>
+                    @endif
+                @else
+                    —
+                @endif
+            </dd>
+
+            <dt class="col-sm-4 text-muted">MAC / IP</dt>
+            <dd class="col-sm-8 font-monospace small">
+                {{ $payment->mac ?? '—' }} / {{ $payment->ip ?? '—' }}
+            </dd>
+
+            <dt class="col-sm-4 text-muted">Login URL</dt>
+            <dd class="col-sm-8 small text-break">{{ $payment->login_url ?? '—' }}</dd>
+
+            <dt class="col-sm-4 text-muted">Original URL</dt>
+            <dd class="col-sm-8 small text-break">{{ $payment->orig_url ?? '—' }}</dd>
 
             <dt class="col-sm-4 text-muted">M-Pesa Receipt</dt>
             <dd class="col-sm-8 font-monospace">{{ $payment->mpesa_receipt ?? '—' }}</dd>

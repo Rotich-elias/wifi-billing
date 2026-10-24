@@ -15,6 +15,20 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // The app runs behind ngrok/Cloudflare Tunnel or a local reverse
+        // proxy. Trust only local proxies by default so signed URLs keep the
+        // public HTTPS scheme and host.
+        $middleware->trustProxies(
+            at: array_values(array_filter(array_map(
+                'trim',
+                explode(',', (string) env('TRUSTED_PROXIES', '127.0.0.1,::1')),
+            ))),
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO,
+        );
+
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
             'mpesa.callback' => EnsureMpesaCallbackIsAuthentic::class,

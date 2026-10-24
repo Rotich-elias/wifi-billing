@@ -4,11 +4,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\URL;
 
 class Payment extends Model
 {
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_PAID = 'paid';
+
+    public const STATUS_FAILED = 'failed';
+
+    public const STATUS_EXPIRED = 'expired';
+
     protected $fillable = [
-        'voucher_id', 'phone', 'amount', 'status',
+        'plan_id', 'voucher_id', 'customer_name', 'phone', 'amount', 'status',
+        'mac', 'ip', 'login_url', 'orig_url',
         'merchant_request_id', 'checkout_request_id',
         'mpesa_receipt', 'result_code', 'result_desc',
         'paid_at', 'raw_callback',
@@ -20,19 +30,85 @@ class Payment extends Model
         'raw_callback' => 'array',
     ];
 
+    public function plan(): BelongsTo
+    {
+        return $this->belongsTo(Plan::class);
+    }
+
     public function voucher(): BelongsTo
     {
         return $this->belongsTo(Voucher::class);
     }
 
+    public function isPending(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->status === self::STATUS_PAID;
+    }
+
     public function getStatusBadgeAttribute(): string
     {
         return match ($this->status) {
-            'pending' => 'warning',
-            'completed' => 'success',
-            'failed' => 'danger',
-            'cancelled' => 'secondary',
+            self::STATUS_PENDING => 'warning',
+            self::STATUS_PAID => 'success',
+            self::STATUS_FAILED => 'danger',
+            self::STATUS_EXPIRED => 'secondary',
             default => 'secondary',
         };
+    }
+
+    /**
+     * The RouterOS hotspot login URL for this payment's voucher.
+     */
+    public function hotspotLoginUrl(): ?string
+    {
+        if (! $this->login_url || ! $this->voucher) {
+            return null;
+        }
+
+        return $this->voucher->hotspotLoginUrl($this->login_url, $this->orig_url);
+    }
+
+    /**
+     * Signed URL used by the browser to poll this payment.
+     */
+    public function signedStatusUrl(): string
+    {
+        return URL::temporarySignedRoute(
+            'portal.payment.status',
+            now()->addHours(24),
+            ['payment' => $this->id],
+        );
+    }
+
+    public function signedShowUrl(): string
+    {
+        return URL::temporarySignedRoute(
+            'portal.payment.show',
+            now()->addHours(24),
+            ['payment' => $this->id],
+        );
+    }
+
+    /**
+     * Normalise a Kenyan M-Pesa number to 2547XXXXXXXX / 2541XXXXXXXX.
+     */
+    public static function normalisePhone(string $phone): string
+    {
+        $phone = preg_replace('/\D/', '', $phone);
+
+        if (str_starts_with($phone, '0')) {
+            $phone = '254'.substr($phone, 1);
+        } elseif (str_starts_with($phone, '7') || str_starts_with($phone, '1')) {
+            $phone = '254'.$phone;
+        } elseif (str_starts_with($phone, '2540')) {
+            $phone = '254'.substr($phone, 4);
+        }
+
+        return $phone;
     }
 }

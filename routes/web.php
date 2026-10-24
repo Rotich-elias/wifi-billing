@@ -16,6 +16,15 @@ Route::post('/purchase', [VoucherPortalController::class, 'purchase'])
 Route::post('/check', [VoucherPortalController::class, 'check'])
     ->middleware('throttle:voucher-check')
     ->name('portal.check');
+
+// Payment pages and polling are signed URLs: the ID alone is not enough.
+Route::get('/payments/{payment}', [VoucherPortalController::class, 'showPayment'])
+    ->middleware('signed')
+    ->name('portal.payment.show');
+Route::get('/payments/{payment}/status', [VoucherPortalController::class, 'paymentStatus'])
+    ->middleware('signed')
+    ->name('portal.payment.status');
+
 // Status pages are addressed by an unguessable access token, never by ID.
 Route::get('/voucher/{voucher:access_token}/status', [VoucherPortalController::class, 'status'])
     ->name('portal.status');
@@ -39,4 +48,5 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('payments', [PaymentController::class, 'index'])->name('payments.index');
     Route::get('payments/{payment}', [PaymentController::class, 'show'])->name('payments.show');
     Route::post('payments/{payment}/query', [PaymentController::class, 'queryStatus'])->name('payments.query');
+    Route::post('payments/{payment}/provision', [PaymentController::class, 'retryProvisioning'])->name('payments.provision');
 });

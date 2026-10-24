@@ -2,19 +2,21 @@
 
 namespace App\Jobs;
 
+use App\Contracts\RouterDriver;
 use App\Models\Voucher;
-use App\Services\MikrotikService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Throwable;
 
 class ExpireVoucherJob implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
-    public int $tries = 3;
+    public int $tries = 10;
 
-    public int $backoff = 10;
+    /** @var array<int, int> */
+    public array $backoff = [10, 30, 60, 120, 300];
 
     /** Avoid duplicate expiry/removal jobs from the scheduler and status page. */
     public int $uniqueFor = 300;
@@ -26,7 +28,7 @@ class ExpireVoucherJob implements ShouldBeUnique, ShouldQueue
         return 'expire-voucher:'.$this->voucher->id;
     }
 
-    public function handle(MikrotikService $mikrotik): void
+    public function handle(RouterDriver $router): void
     {
         $voucher = Voucher::withTrashed()->find($this->voucher->id);
 
@@ -41,7 +43,21 @@ class ExpireVoucherJob implements ShouldBeUnique, ShouldQueue
         // Always remove the hotspot user, even if another code path already
         // flipped the status to expired.
         if ($voucher->mikrotik_synced) {
-            $mikrotik->syncVoucher($voucher, 'remove');
+            $router->removeUser($voucher->code);
+
+            $voucher->update([
+                'mikrotik_synced' => false,
+                'mikrotik_user' => null,
+            ]);
+        }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        $voucher = Voucher::withTrashed()->find($this->voucher->id);
+
+        if ($voucher && $exception) {
+            $voucher->markProvisioningFailed($exception->getMessage());
         }
     }
 }

@@ -10,19 +10,21 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsureMpesaCallbackIsAuthentic
 {
     /**
-     * M-Pesa does not sign callbacks, so the callback URL carries a shared
-     * secret and, optionally, requests are restricted to Safaricom IP ranges.
+     * M-Pesa does not sign callbacks. The secret is part of the URL path so it
+     * does not end up in proxy access logs as a query string.
      */
     public function handle(Request $request, Closure $next): Response
     {
         $secret = (string) config('mpesa.callback_secret', '');
 
-        if ($secret !== '') {
-            $provided = (string) $request->query('secret', '');
+        if ($secret === '') {
+            return $this->deny();
+        }
 
-            if (! hash_equals($secret, $provided)) {
-                return $this->deny();
-            }
+        $provided = (string) $request->route('secret', '');
+
+        if (! hash_equals($secret, $provided)) {
+            return $this->deny();
         }
 
         $allowedIps = (array) config('mpesa.allowed_ips', []);
@@ -36,9 +38,10 @@ class EnsureMpesaCallbackIsAuthentic
 
     private function deny(): Response
     {
+        // Do not reveal that the callback route exists to unauthenticated callers.
         return response()->json([
             'ResultCode' => 1,
-            'ResultDesc' => 'Forbidden',
-        ], 403);
+            'ResultDesc' => 'Not found',
+        ], 404);
     }
 }

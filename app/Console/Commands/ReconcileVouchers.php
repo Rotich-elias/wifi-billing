@@ -8,16 +8,19 @@ use App\Services\MikrotikService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 #[Signature('vouchers:reconcile {--fix : Remove hotspot users that no longer have a valid voucher}')]
-#[Description('Compare vouchers in the database with MikroTik hotspot users and report drift')]
+#[Description('Compare vouchers in the database with router hotspot users and report drift')]
 class ReconcileVouchers extends Command
 {
     public function handle(MikrotikService $mikrotik): int
     {
         try {
-            $users = $mikrotik->getHotspotUsers();
+            $users = config('router.driver') === 'routeros'
+                ? $mikrotik->getHotspotUsers()
+                : DB::table('mock_router_users')->get()->map(fn ($user) => ['name' => $user->username])->all();
         } catch (Throwable $e) {
             $this->error('Could not read hotspot users: '.$e->getMessage());
 
@@ -45,13 +48,13 @@ class ReconcileVouchers extends Command
             }
         }
 
-        $unfulfilled = Payment::where('status', 'completed')
+        $unfulfilled = Payment::where('status', Payment::STATUS_PAID)
             ->whereHas('voucher', fn ($query) => $query->where('status', 'unused'))
             ->count();
 
         $this->info('Hotspot users on router: '.count($users));
         $this->info('Router users without a valid voucher: '.count($stale));
-        $this->info('Completed payments whose voucher is still unused: '.$unfulfilled);
+        $this->info('Paid payments whose voucher is still unused: '.$unfulfilled);
 
         if ($stale !== []) {
             $this->line('Stale users: '.implode(', ', array_slice($stale, 0, 50)).(count($stale) > 50 ? ' …' : ''));
@@ -62,7 +65,11 @@ class ReconcileVouchers extends Command
 
             foreach ($stale as $code) {
                 try {
-                    $mikrotik->removeHotspotUserByName($code);
+                    if (config('router.driver') === 'routeros') {
+                        $mikrotik->removeHotspotUserByName($code);
+                    } else {
+                        DB::table('mock_router_users')->where('username', $code)->delete();
+                    }
                     $removed++;
                 } catch (Throwable $e) {
                     $this->warn("Failed to remove {$code}: {$e->getMessage()}");

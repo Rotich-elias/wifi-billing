@@ -10,7 +10,7 @@ class Plan extends Model
     protected $fillable = [
         'name', 'type', 'duration_hours', 'price',
         'bandwidth_up', 'bandwidth_down',
-        'session_timeout', 'idle_timeout',
+        'session_timeout', 'idle_timeout', 'data_limit',
         'is_active', 'description',
     ];
 

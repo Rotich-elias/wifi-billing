@@ -26,11 +26,12 @@ class PlanController extends Controller
             'name' => 'required|string|max:100',
             'type' => 'required|in:daily,weekly,monthly',
             'duration_hours' => 'required|integer|min:1',
-            'price' => 'required|numeric|min:0',
+            'price' => 'required|numeric|min:1',
             'bandwidth_up' => 'required|string|max:20',
             'bandwidth_down' => 'required|string|max:20',
             'session_timeout' => 'nullable|integer|min:0',
             'idle_timeout' => 'nullable|integer|min:0',
+            'data_limit' => ['nullable', 'string', 'max:20', 'regex:/^[0-9]+(\.[0-9]+)?[kKmMgGtT]?$/'],
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
@@ -61,11 +62,12 @@ class PlanController extends Controller
             'name' => 'required|string|max:100',
             'type' => 'required|in:daily,weekly,monthly',
             'duration_hours' => 'required|integer|min:1',
-            'price' => 'required|numeric|min:0',
+            'price' => 'required|numeric|min:1',
             'bandwidth_up' => 'required|string|max:20',
             'bandwidth_down' => 'required|string|max:20',
             'session_timeout' => 'nullable|integer|min:0',
             'idle_timeout' => 'nullable|integer|min:0',
+            'data_limit' => ['nullable', 'string', 'max:20', 'regex:/^[0-9]+(\.[0-9]+)?[kKmMgGtT]?$/'],
             'description' => 'nullable|string',
         ]);
 

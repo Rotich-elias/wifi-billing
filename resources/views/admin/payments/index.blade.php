@@ -48,7 +48,7 @@
             <div class="col-md-2">
                 <select name="status" class="form-select form-select-sm">
                     <option value="">All statuses</option>
-                    @foreach(['pending','completed','failed','cancelled'] as $s)
+                    @foreach(['pending','paid','failed','expired'] as $s)
                     <option value="{{ $s }}" {{ request('status') === $s ? 'selected' : '' }}>{{ ucfirst($s) }}</option>
                     @endforeach
                 </select>
@@ -94,7 +94,7 @@
                         @else —
                         @endif
                     </td>
-                    <td class="small">{{ $payment->voucher?->plan?->name ?? '—' }}</td>
+                    <td class="small">{{ $payment->plan?->name ?? $payment->voucher?->plan?->name ?? '—' }}</td>
                     <td class="fw-semibold">KES {{ number_format($payment->amount, 2) }}</td>
                     <td><span class="badge bg-{{ $payment->status_badge }}">{{ $payment->status }}</span></td>
                     <td class="font-monospace small text-muted">{{ $payment->mpesa_receipt ?? '—' }}</td>

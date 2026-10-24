@@ -63,6 +63,14 @@
                value="{{ old('idle_timeout', $plan->idle_timeout ?? '') }}" placeholder="e.g. 300">
     </div>
 
+    <div class="col-md-6">
+        <label class="form-label fw-semibold">Data Limit (optional)</label>
+        <input type="text" name="data_limit" class="form-control @error('data_limit') is-invalid @enderror"
+               value="{{ old('data_limit', $plan->data_limit ?? '') }}" placeholder="e.g. 5G">
+        <div class="form-text">RouterOS size format. Leave blank for unlimited.</div>
+        @error('data_limit')<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
+
     <div class="col-12">
         <label class="form-label fw-semibold">Description</label>
         <textarea name="description" class="form-control" rows="2"

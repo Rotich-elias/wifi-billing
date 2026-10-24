@@ -12,12 +12,20 @@ class SmsService
 
     public function __construct()
     {
+        if (! config('sms.enabled')) {
+            return;
+        }
+
         $at = new AfricasTalking(config('africastalking.username'), config('africastalking.api_key'));
         $this->sms = $at->sms();
     }
 
     public function sendVoucherCode(Voucher $voucher): bool
     {
+        if (! config('sms.enabled') || ! isset($this->sms)) {
+            return false;
+        }
+
         $phone = $voucher->customer_phone;
         if (! $phone) {
             return false;
@@ -53,6 +61,10 @@ class SmsService
 
     public function sendExpiryWarning(Voucher $voucher): bool
     {
+        if (! config('sms.enabled') || ! isset($this->sms)) {
+            return false;
+        }
+
         $phone = $voucher->customer_phone;
         if (! $phone) {
             return false;

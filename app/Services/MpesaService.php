@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Jobs\SendVoucherSms;
 use App\Jobs\SyncVoucherToMikrotik;
 use App\Models\Payment;
+use App\Models\Plan;
 use App\Models\Voucher;
 use Exception;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -22,9 +24,11 @@ class MpesaService
 
     private string $passkey;
 
-    private string $callbackUrl;
-
     private string $baseUrl;
+
+    private string $callbackBaseUrl;
+
+    private string $callbackSecret;
 
     public function __construct()
     {
@@ -32,15 +36,120 @@ class MpesaService
         $this->consumerSecret = (string) config('mpesa.consumer_secret');
         $this->shortcode = (string) config('mpesa.shortcode');
         $this->passkey = (string) config('mpesa.passkey');
-        $this->callbackUrl = (string) config('mpesa.callback_url');
-        $this->baseUrl = config('mpesa.environment') === 'production'
+        $this->callbackBaseUrl = rtrim((string) config('mpesa.callback_base_url'), '/');
+        $this->callbackSecret = (string) config('mpesa.callback_secret');
+        $this->baseUrl = config('mpesa.env') === 'production'
             ? 'https://api.safaricom.co.ke'
             : 'https://sandbox.safaricom.co.ke';
     }
 
+    /**
+     * Create the payment first, then ask Safaricom to push the STK prompt.
+     *
+     * @param  array{name?: string|null, mac?: string|null, ip?: string|null, login_url?: string|null, orig_url?: string|null}  $context
+     */
+    public function initiatePayment(Plan $plan, string $phone, array $context = []): Payment
+    {
+        $phone = Payment::normalisePhone($phone);
+        $amount = (int) ceil((float) $plan->price);
+
+        if ($amount < 1) {
+            throw new Exception('Invalid payment amount.');
+        }
+
+        if ($this->callbackBaseUrl === '' || $this->callbackSecret === '') {
+            throw new Exception('M-Pesa callback base URL and secret are not configured.');
+        }
+
+        $payment = Payment::create([
+            'plan_id' => $plan->id,
+            'customer_name' => $context['name'] ?? null,
+            'phone' => $phone,
+            'amount' => $amount,
+            'status' => Payment::STATUS_PENDING,
+            'mac' => $context['mac'] ?? null,
+            'ip' => $context['ip'] ?? null,
+            'login_url' => $context['login_url'] ?? null,
+            'orig_url' => $context['orig_url'] ?? null,
+        ]);
+
+        try {
+            $this->sendStkPush($payment);
+
+            return $payment->fresh();
+        } catch (\Throwable $e) {
+            $payment->update([
+                'status' => Payment::STATUS_FAILED,
+                'result_desc' => $e->getMessage(),
+            ]);
+
+            Log::error('M-Pesa STK Push failed', [
+                'payment_id' => $payment->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+    }
+
+    private function sendStkPush(Payment $payment): void
+    {
+        $timestamp = now()->format('YmdHis');
+        $password = base64_encode($this->shortcode.$this->passkey.$timestamp);
+        $token = $this->getAccessToken();
+
+        $response = Http::withToken($token)
+            ->post("{$this->baseUrl}/mpesa/stkpush/v1/processrequest", [
+                'BusinessShortCode' => $this->shortcode,
+                'Password' => $password,
+                'Timestamp' => $timestamp,
+                'TransactionType' => 'CustomerPayBillOnline',
+                'Amount' => (int) $payment->amount,
+                'PartyA' => $payment->phone,
+                'PartyB' => $this->shortcode,
+                'PhoneNumber' => $payment->phone,
+                'CallBackURL' => $this->callbackUrl(),
+                'AccountReference' => 'WIFI'.$payment->id,
+                'TransactionDesc' => 'WiFi access',
+            ]);
+
+        Log::info('M-Pesa STK Push response', [
+            'payment_id' => $payment->id,
+            'http_status' => $response->status(),
+            'response_code' => $response->json('ResponseCode'),
+            'checkout_request_id' => $response->json('CheckoutRequestID'),
+        ]);
+
+        if (! $response->successful()) {
+            throw new Exception('STK Push failed (HTTP '.$response->status().').');
+        }
+
+        $data = $response->json();
+
+        if (($data['ResponseCode'] ?? '') !== '0') {
+            throw new Exception('STK Push error: '.($data['ResponseDescription'] ?? 'Unknown error'));
+        }
+
+        if (empty($data['CheckoutRequestID'])) {
+            throw new Exception('STK Push response did not include a CheckoutRequestID.');
+        }
+
+        $payment->update([
+            'merchant_request_id' => $data['MerchantRequestID'] ?? null,
+            'checkout_request_id' => $data['CheckoutRequestID'],
+        ]);
+    }
+
+    public function callbackUrl(): string
+    {
+        return $this->callbackBaseUrl.'/api/mpesa/callback/'.rawurlencode($this->callbackSecret);
+    }
+
     private function getAccessToken(): string
     {
-        return Cache::remember('mpesa:access_token', now()->addMinutes(50), function () {
+        $cacheKey = 'mpesa:access_token:'.md5($this->baseUrl.$this->consumerKey);
+
+        return Cache::remember($cacheKey, now()->addMinutes(50), function () {
             $response = Http::withBasicAuth($this->consumerKey, $this->consumerSecret)
                 ->get("{$this->baseUrl}/oauth/v1/generate?grant_type=client_credentials");
 
@@ -52,76 +161,10 @@ class MpesaService
         });
     }
 
-    public function initiateSTKPush(Voucher $voucher, string $phone): Payment
-    {
-        $phone = $this->formatPhone($phone);
-        $amount = (int) ceil((float) $voucher->plan->price);
-
-        if ($amount < 1) {
-            throw new Exception('Invalid payment amount.');
-        }
-
-        // Persist the intent before calling M-Pesa. If the process dies after
-        // Safaricom accepts the push, the callback still has a payment to find.
-        $payment = Payment::create([
-            'voucher_id' => $voucher->id,
-            'phone' => $phone,
-            'amount' => $amount,
-            'status' => 'pending',
-        ]);
-
-        try {
-            $timestamp = now()->format('YmdHis');
-            $password = base64_encode($this->shortcode.$this->passkey.$timestamp);
-            $token = $this->getAccessToken();
-
-            $response = Http::withToken($token)
-                ->post("{$this->baseUrl}/mpesa/stkpush/v1/processrequest", [
-                    'BusinessShortCode' => $this->shortcode,
-                    'Password' => $password,
-                    'Timestamp' => $timestamp,
-                    'TransactionType' => 'CustomerPayBillOnline',
-                    'Amount' => $amount,
-                    'PartyA' => $phone,
-                    'PartyB' => $this->shortcode,
-                    'PhoneNumber' => $phone,
-                    'CallBackURL' => $this->callbackUrl,
-                    'AccountReference' => $voucher->code,
-                    'TransactionDesc' => "WiFi voucher: {$voucher->plan->name}",
-                ]);
-
-            Log::info('M-Pesa STK Push response', [
-                'payment_id' => $payment->id,
-                'http_status' => $response->status(),
-                'checkout_request_id' => $response->json('CheckoutRequestID'),
-            ]);
-
-            if (! $response->successful()) {
-                throw new Exception('STK Push failed (HTTP '.$response->status().').');
-            }
-
-            $data = $response->json();
-
-            if (($data['ResponseCode'] ?? '') !== '0') {
-                throw new Exception('STK Push error: '.($data['ResponseDescription'] ?? 'Unknown error'));
-            }
-
-            $payment->update([
-                'merchant_request_id' => $data['MerchantRequestID'] ?? null,
-                'checkout_request_id' => $data['CheckoutRequestID'] ?? null,
-            ]);
-
-            return $payment;
-        } catch (\Throwable $e) {
-            $payment->update([
-                'status' => 'failed',
-                'result_desc' => $e->getMessage(),
-            ]);
-
-            throw $e;
-        }
-    }
-
+    /**
+     * Process a Daraja callback. Unknown or already-processed callbacks are
+     * ignored; the controller always returns 200.
+     */
     public function handleCallback(array $data): void
     {
         $stkCallback = $data['Body']['stkCallback'] ?? null;
@@ -130,14 +173,18 @@ class MpesaService
             return;
         }
 
-        $payment = Payment::where('merchant_request_id', $stkCallback['MerchantRequestID'] ?? null)
-            ->orWhere('checkout_request_id', $stkCallback['CheckoutRequestID'] ?? null)
-            ->first();
+        $checkoutRequestId = $stkCallback['CheckoutRequestID'] ?? null;
+
+        if (empty($checkoutRequestId)) {
+            return;
+        }
+
+        $payment = Payment::where('checkout_request_id', $checkoutRequestId)->first();
 
         if (! $payment) {
             Log::warning('No payment found for M-Pesa callback', [
+                'checkout_request_id' => $checkoutRequestId,
                 'merchant_request_id' => $stkCallback['MerchantRequestID'] ?? null,
-                'checkout_request_id' => $stkCallback['CheckoutRequestID'] ?? null,
             ]);
 
             return;
@@ -145,100 +192,263 @@ class MpesaService
 
         $resultCode = (int) ($stkCallback['ResultCode'] ?? -1);
 
-        if ($resultCode === 0) {
-            $metadata = collect($stkCallback['CallbackMetadata']['Item'] ?? [])
-                ->pluck('Value', 'Name')
-                ->all();
-
-            $this->completePayment($payment, $metadata, $data, verifyAmount: true);
+        if ($resultCode !== 0) {
+            $this->markFailed($payment, $stkCallback, $data);
 
             return;
         }
 
-        DB::transaction(function () use ($payment, $stkCallback, $resultCode, $data) {
-            $locked = Payment::whereKey($payment->id)->lockForUpdate()->first();
+        $metadata = collect($stkCallback['CallbackMetadata']['Item'] ?? [])
+            ->pluck('Value', 'Name')
+            ->all();
 
-            // Never regress a terminal state.
-            if (! $locked || $locked->status !== 'pending') {
-                return;
-            }
+        $voucher = $this->completePayment($payment, $metadata, $data, verifyAmount: true);
 
-            $locked->update([
-                'status' => 'failed',
-                'result_code' => (string) $resultCode,
-                'result_desc' => $stkCallback['ResultDesc'] ?? null,
-                'raw_callback' => $data,
-            ]);
-        });
+        if ($voucher) {
+            $this->queueFulfilment($voucher);
+        }
     }
 
     /**
-     * Mark a pending payment completed and fulfil the voucher exactly once.
+     * Mark a pending payment paid and create its voucher exactly once.
      */
     public function completePayment(
         Payment $payment,
         array $metadata = [],
         ?array $raw = null,
-        bool $verifyAmount = false,
-    ): bool {
-        return DB::transaction(function () use ($payment, $metadata, $raw, $verifyAmount) {
-            $locked = Payment::whereKey($payment->id)->lockForUpdate()->first();
+        bool $verifyAmount = true,
+    ): ?Voucher {
+        try {
+            $voucher = DB::transaction(function () use ($payment, $metadata, $raw, $verifyAmount) {
+                $locked = Payment::whereKey($payment->id)->lockForUpdate()->first();
 
-            if (! $locked || $locked->status !== 'pending') {
-                return false;
-            }
+                if (! $locked || $locked->status !== Payment::STATUS_PENDING) {
+                    return null;
+                }
 
-            $callbackAmount = $metadata['Amount'] ?? null;
+                if ($verifyAmount) {
+                    $received = $metadata['Amount'] ?? null;
+                    $expected = (float) $locked->amount;
 
-            if ($verifyAmount && (
-                $callbackAmount === null
-                || (int) round((float) $callbackAmount) !== (int) round((float) $locked->amount)
-            )) {
-                Log::warning('M-Pesa amount mismatch', [
-                    'payment_id' => $locked->id,
-                    'expected' => (float) $locked->amount,
-                    'received' => $callbackAmount,
-                ]);
+                    if ($received === null || round((float) $received, 2) !== round($expected, 2)) {
+                        Log::warning('M-Pesa amount mismatch', [
+                            'payment_id' => $locked->id,
+                            'expected' => $expected,
+                            'received' => $received,
+                        ]);
+
+                        $locked->update([
+                            'status' => Payment::STATUS_FAILED,
+                            'result_code' => 'AMOUNT_MISMATCH',
+                            'result_desc' => 'Amount mismatch',
+                            'raw_callback' => $raw,
+                        ]);
+
+                        return null;
+                    }
+                }
+
+                $receipt = $metadata['MpesaReceiptNumber'] ?? null;
+
+                // A success without a receipt is not enough evidence to grant
+                // access. Leave the payment pending so recovery can retry.
+                if (empty($receipt)) {
+                    Log::warning('M-Pesa success response without a receipt', [
+                        'payment_id' => $locked->id,
+                    ]);
+
+                    return null;
+                }
+
+                if (Payment::where('mpesa_receipt', $receipt)
+                    ->whereKeyNot($locked->id)
+                    ->exists()) {
+                    Log::alert('Duplicate M-Pesa receipt in callback', [
+                        'payment_id' => $locked->id,
+                        'receipt' => $receipt,
+                    ]);
+
+                    $locked->update([
+                        'status' => Payment::STATUS_FAILED,
+                        'result_code' => 'DUPLICATE_RECEIPT',
+                        'result_desc' => 'Duplicate M-Pesa receipt',
+                        'raw_callback' => $raw,
+                    ]);
+
+                    return null;
+                }
 
                 $locked->update([
-                    'status' => 'failed',
-                    'result_desc' => 'Amount mismatch',
+                    'status' => Payment::STATUS_PAID,
+                    'result_code' => '0',
+                    'result_desc' => 'Success',
+                    'mpesa_receipt' => $receipt,
+                    'paid_at' => now(),
                     'raw_callback' => $raw,
                 ]);
 
-                return false;
+                $plan = $locked->plan ?? Plan::find($locked->plan_id);
+
+                if (! $plan) {
+                    throw new Exception('Payment has no plan; cannot create a voucher.');
+                }
+
+                $voucher = $locked->voucher;
+
+                if (! $voucher) {
+                    $voucher = Voucher::create([
+                        'plan_id' => $plan->id,
+                        'customer_name' => $locked->customer_name,
+                        'customer_phone' => $this->normaliseCallbackPhone($metadata['PhoneNumber'] ?? null)
+                            ?: $locked->phone,
+                        'status' => 'unused',
+                    ]);
+                }
+
+                if ($voucher->status === 'unused') {
+                    $voucher->activate();
+                }
+
+                $locked->update(['voucher_id' => $voucher->id]);
+
+                return $voucher;
+            });
+        } catch (QueryException $e) {
+            // A concurrent callback may have stored the same receipt first.
+            if (str_contains(strtolower($e->getMessage()), 'unique')) {
+                Log::alert('Duplicate M-Pesa receipt rejected', [
+                    'payment_id' => $payment->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $this->markFailed($payment, [
+                    'ResultCode' => 'DUPLICATE_RECEIPT',
+                    'ResultDesc' => 'Duplicate M-Pesa receipt',
+                ], $raw);
+
+                return null;
+            }
+
+            throw $e;
+        }
+
+        return $voucher;
+    }
+
+    private function queueFulfilment(Voucher $voucher): void
+    {
+        try {
+            SyncVoucherToMikrotik::dispatch($voucher, 'add');
+        } catch (\Throwable $e) {
+            // The payment is already paid. Keep the voucher visible as
+            // "Activating..." and let an admin retry provisioning.
+            Log::error('Could not queue voucher provisioning', [
+                'voucher_id' => $voucher->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        if (config('sms.enabled')) {
+            try {
+                SendVoucherSms::dispatch($voucher);
+            } catch (\Throwable $e) {
+                Log::error('Could not queue voucher SMS', [
+                    'voucher_id' => $voucher->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    private function markFailed(Payment $payment, array $stkCallback, ?array $raw = null): void
+    {
+        DB::transaction(function () use ($payment, $stkCallback, $raw) {
+            $locked = Payment::whereKey($payment->id)->lockForUpdate()->first();
+
+            if (! $locked || $locked->status !== Payment::STATUS_PENDING) {
+                return;
             }
 
             $locked->update([
-                'status' => 'completed',
-                'result_code' => '0',
-                'result_desc' => 'Success',
-                'mpesa_receipt' => $metadata['MpesaReceiptNumber'] ?? null,
-                'paid_at' => now(),
+                'status' => Payment::STATUS_FAILED,
+                'result_code' => (string) ($stkCallback['ResultCode'] ?? ''),
+                'result_desc' => $stkCallback['ResultDesc'] ?? null,
                 'raw_callback' => $raw,
             ]);
-
-            $voucher = $locked->voucher;
-
-            if (! $voucher || $voucher->status !== 'unused') {
-                return true;
-            }
-
-            if (! empty($metadata['PhoneNumber'])) {
-                $voucher->customer_phone = $metadata['PhoneNumber'];
-            }
-
-            $voucher->activate();
-
-            SyncVoucherToMikrotik::dispatch($voucher, 'add')->afterCommit();
-            SendVoucherSms::dispatch($voucher)->afterCommit();
-
-            return true;
         });
+    }
+
+    /**
+     * Query Daraja for a pending STK request and reconcile the payment.
+     */
+    public function reconcilePendingPayment(Payment $payment): void
+    {
+        if (! $payment->isPending()) {
+            return;
+        }
+
+        if (! $payment->checkout_request_id) {
+            if ($payment->created_at->lt(now()->subMinutes(5))) {
+                $payment->update([
+                    'status' => Payment::STATUS_EXPIRED,
+                    'result_desc' => 'No STK request was created',
+                ]);
+            }
+
+            return;
+        }
+
+        try {
+            $result = $this->querySTKStatus($payment);
+        } catch (\Throwable $e) {
+            Log::warning('STK query failed during recovery', [
+                'payment_id' => $payment->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        $resultCode = $result['ResultCode'] ?? null;
+
+        if ((string) $resultCode === '0') {
+            $voucher = $this->completePayment($payment, [
+                'MpesaReceiptNumber' => $result['MpesaReceiptNumber'] ?? null,
+            ], raw: $result, verifyAmount: false);
+
+            if ($voucher) {
+                $this->queueFulfilment($voucher);
+            }
+
+            return;
+        }
+
+        if ($resultCode !== null && in_array((string) $resultCode, ['1', '1032', '1037', '2001'], true)) {
+            $payment->update([
+                'status' => Payment::STATUS_FAILED,
+                'result_code' => (string) $resultCode,
+                'result_desc' => $result['ResultDesc'] ?? null,
+                'raw_callback' => $result,
+            ]);
+
+            return;
+        }
+
+        if ($payment->created_at->lt(now()->subMinutes(5))) {
+            $payment->update([
+                'status' => Payment::STATUS_EXPIRED,
+                'result_code' => (string) $resultCode,
+                'result_desc' => $result['ResultDesc'] ?? 'Timed out',
+                'raw_callback' => $result,
+            ]);
+        }
     }
 
     public function querySTKStatus(Payment $payment): array
     {
+        if (! $payment->checkout_request_id) {
+            throw new Exception('Payment has no CheckoutRequestID.');
+        }
+
         $timestamp = now()->format('YmdHis');
         $password = base64_encode($this->shortcode.$this->passkey.$timestamp);
         $token = $this->getAccessToken();
@@ -251,21 +461,27 @@ class MpesaService
                 'CheckoutRequestID' => $payment->checkout_request_id,
             ]);
 
+        Log::info('M-Pesa STK query response', [
+            'payment_id' => $payment->id,
+            'http_status' => $response->status(),
+            'result_code' => $response->json('ResultCode'),
+        ]);
+
+        if (! $response->successful()) {
+            throw new Exception('STK query failed (HTTP '.$response->status().').');
+        }
+
         return $response->json() ?? [];
     }
 
-    private function formatPhone(string $phone): string
+    private function normaliseCallbackPhone(mixed $phone): ?string
     {
-        $phone = preg_replace('/\D/', '', $phone);
-
-        if (str_starts_with($phone, '0')) {
-            $phone = '254'.substr($phone, 1);
+        if (! $phone) {
+            return null;
         }
 
-        if (! str_starts_with($phone, '254')) {
-            $phone = '254'.$phone;
-        }
+        $normalised = Payment::normalisePhone((string) $phone);
 
-        return $phone;
+        return preg_match('/^254(7|1)\d{8}$/', $normalised) ? $normalised : null;
     }
 }

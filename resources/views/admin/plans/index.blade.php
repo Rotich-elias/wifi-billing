@@ -19,6 +19,7 @@
                     <th>Duration</th>
                     <th>Price (KES)</th>
                     <th>Bandwidth</th>
+                    <th>Data</th>
                     <th>Vouchers</th>
                     <th>Status</th>
                     <th></th>
@@ -32,6 +33,7 @@
                     <td>{{ $plan->duration_label }}</td>
                     <td>{{ number_format($plan->price, 2) }}</td>
                     <td class="font-monospace small">↑{{ $plan->bandwidth_up }} / ↓{{ $plan->bandwidth_down }}</td>
+                    <td class="small">{{ $plan->data_limit ?? 'Unlimited' }}</td>
                     <td>{{ $plan->vouchers_count }}</td>
                     <td>
                         @if($plan->is_active)
@@ -55,7 +57,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="8" class="text-center text-muted py-5">No plans yet. <a href="{{ route('admin.plans.create') }}">Create one.</a></td></tr>
+                <tr><td colspan="9" class="text-center text-muted py-5">No plans yet. <a href="{{ route('admin.plans.create') }}">Create one.</a></td></tr>
                 @endforelse
             </tbody>
         </table>

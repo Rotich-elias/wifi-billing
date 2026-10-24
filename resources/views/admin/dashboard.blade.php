@@ -66,7 +66,7 @@
                         @forelse($recentPayments as $payment)
                         <tr>
                             <td>{{ $payment->phone }}</td>
-                            <td><span class="badge bg-primary-subtle text-primary">{{ $payment->voucher->plan->name ?? '—' }}</span></td>
+                            <td><span class="badge bg-primary-subtle text-primary">{{ $payment->plan?->name ?? $payment->voucher?->plan?->name ?? '—' }}</span></td>
                             <td class="fw-semibold">KES {{ number_format($payment->amount, 2) }}</td>
                             <td class="font-monospace small text-muted">{{ $payment->mpesa_receipt ?? '—' }}</td>
                             <td class="text-muted small">{{ $payment->paid_at?->diffForHumans() }}</td>

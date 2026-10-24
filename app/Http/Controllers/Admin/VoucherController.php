@@ -6,17 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Jobs\SyncVoucherToMikrotik;
 use App\Models\Plan;
 use App\Models\Voucher;
-use App\Services\MikrotikService;
 use App\Services\VoucherService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
 class VoucherController extends Controller
 {
-    public function __construct(
-        private VoucherService $voucherService,
-        private MikrotikService $mikrotikService,
-    ) {}
+    public function __construct(private VoucherService $voucherService) {}
 
     public function index(Request $request)
     {
@@ -54,10 +50,15 @@ class VoucherController extends Controller
         $request->validate([
             'plan_id' => 'required|exists:plans,id',
             'quantity' => 'required|integer|min:1|max:500',
+            'activate' => 'boolean',
         ]);
 
         $plan = Plan::findOrFail($request->plan_id);
-        $vouchers = $this->voucherService->generate($plan, $request->quantity);
+        $vouchers = $this->voucherService->generate(
+            $plan,
+            $request->quantity,
+            $request->boolean('activate'),
+        );
 
         if ($request->boolean('print_after')) {
             $batchId = $vouchers->first()->batch_id;
@@ -105,6 +106,13 @@ class VoucherController extends Controller
     public function syncMikrotik(Voucher $voucher)
     {
         $action = $voucher->mikrotik_synced ? 'remove' : 'add';
+
+        // Never put an unpaid or expired voucher on the router: that would
+        // grant free access to anyone holding the printed code.
+        if ($action === 'add' && $voucher->status !== 'active') {
+            return back()->with('error', 'Only active vouchers can be provisioned.');
+        }
+
         SyncVoucherToMikrotik::dispatch($voucher, $action);
 
         return back()->with('success', "MikroTik {$action} queued for voucher {$voucher->code}.");
@@ -127,15 +135,23 @@ class VoucherController extends Controller
             return $pdf->download('vouchers-selected.pdf');
         }
 
+        $applied = 0;
+
         foreach ($vouchers as $voucher) {
+            if ($request->action === 'sync' && $voucher->status !== 'active') {
+                continue;
+            }
+
             match ($request->action) {
                 'revoke' => $this->voucherService->revokeVoucher($voucher),
                 'delete' => $this->deleteVoucher($voucher),
                 'sync' => SyncVoucherToMikrotik::dispatch($voucher, 'add'),
             };
+
+            $applied++;
         }
 
-        return back()->with('success', "Bulk {$request->action} applied to {$vouchers->count()} voucher(s).");
+        return back()->with('success', "Bulk {$request->action} applied to {$applied} voucher(s).");
     }
 
     private function deleteVoucher(Voucher $voucher): void

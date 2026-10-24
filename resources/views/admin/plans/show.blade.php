@@ -17,6 +17,8 @@
                     <dd class="col-7 fw-semibold">KES {{ number_format($plan->price, 2) }}</dd>
                     <dt class="col-5 text-muted">Bandwidth</dt>
                     <dd class="col-7 font-monospace small">↑{{ $plan->bandwidth_up }} / ↓{{ $plan->bandwidth_down }}</dd>
+                    <dt class="col-5 text-muted">Data limit</dt>
+                    <dd class="col-7">{{ $plan->data_limit ?? 'Unlimited' }}</dd>
                     <dt class="col-5 text-muted">Vouchers</dt>
                     <dd class="col-7">{{ $plan->vouchers_count }}</dd>
                     <dt class="col-5 text-muted">Status</dt>

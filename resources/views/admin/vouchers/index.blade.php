@@ -64,7 +64,7 @@
                         <th>Plan</th>
                         <th>Status</th>
                         <th>Customer</th>
-                        <th>MikroTik</th>
+                        <th>Router</th>
                         <th>Expires</th>
                         <th>Created</th>
                         <th></th>
@@ -82,9 +82,9 @@
                         <td class="small text-muted">{{ $voucher->customer_name ?? $voucher->customer_phone ?? '—' }}</td>
                         <td>
                             @if($voucher->mikrotik_synced)
-                                <span class="badge bg-success-subtle text-success"><i class="bi bi-check2"></i> Synced</span>
+                                <span class="badge bg-success-subtle text-success"><i class="bi bi-check2"></i> Provisioned</span>
                             @else
-                                <span class="badge bg-secondary-subtle text-secondary">Not synced</span>
+                                <span class="badge bg-secondary-subtle text-secondary">Not provisioned</span>
                             @endif
                         </td>
                         <td class="small text-muted">{{ $voucher->expires_at?->format('d M Y H:i') ?? '—' }}</td>

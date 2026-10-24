@@ -29,6 +29,14 @@
                 @error('quantity')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
             <div class="mb-3 form-check">
+                <input type="checkbox" name="activate" value="1" id="activate" class="form-check-input"
+                       {{ old('activate') ? 'checked' : '' }}>
+                <label for="activate" class="form-check-label">
+                    <i class="bi bi-lightning-charge"></i> Activate immediately (support voucher)
+                </label>
+                <div class="form-text">The code becomes active now and is pushed to the router.</div>
+            </div>
+            <div class="mb-3 form-check">
                 <input type="checkbox" name="print_after" value="1" id="print_after" class="form-check-input"
                        {{ old('print_after') ? 'checked' : '' }}>
                 <label for="print_after" class="form-check-label">

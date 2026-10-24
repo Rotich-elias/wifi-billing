@@ -16,37 +16,28 @@ class MpesaCallbackController extends Controller
     public function handle(Request $request): JsonResponse
     {
         $payload = $request->all();
-        $stkCallback = $payload['Body']['stkCallback'] ?? null;
 
-        if (
-            ! is_array($stkCallback)
-            || empty($stkCallback['MerchantRequestID'])
-            || empty($stkCallback['CheckoutRequestID'])
-            || ! array_key_exists('ResultCode', $stkCallback)
-        ) {
-            Log::warning('Rejected malformed M-Pesa callback', ['ip' => $request->ip()]);
-
-            return response()->json([
-                'ResultCode' => 1,
-                'ResultDesc' => 'Invalid payload',
-            ], 422);
-        }
+        // Log every callback for audit. The secret is in the path, never in
+        // this payload, so there are no credentials to redact here.
+        Log::info('M-Pesa callback received', [
+            'ip' => $request->ip(),
+            'payload' => $payload,
+        ]);
 
         try {
             $this->mpesa->handleCallback($payload);
         } catch (Throwable $e) {
             Log::error('M-Pesa callback processing failed', [
-                'checkout_request_id' => $stkCallback['CheckoutRequestID'],
+                'checkout_request_id' => $payload['Body']['stkCallback']['CheckoutRequestID'] ?? null,
                 'error' => $e->getMessage(),
             ]);
-
-            // Non-2xx tells Safaricom to retry.
-            return response()->json([
-                'ResultCode' => 1,
-                'ResultDesc' => 'Processing failed',
-            ], 500);
         }
 
-        return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
+        // Always acknowledge: Safaricom retries non-2xx responses, and the
+        // recovery job will reconcile anything we could not process now.
+        return response()->json([
+            'ResultCode' => 0,
+            'ResultDesc' => 'Accepted',
+        ]);
     }
 }
