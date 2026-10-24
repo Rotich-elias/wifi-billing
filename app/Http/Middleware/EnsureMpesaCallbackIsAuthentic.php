@@ -29,11 +29,28 @@ class EnsureMpesaCallbackIsAuthentic
 
         $allowedIps = (array) config('mpesa.allowed_ips', []);
 
-        if ($allowedIps !== [] && ! IpUtils::checkIp((string) $request->ip(), $allowedIps)) {
+        if ($allowedIps !== [] && ! IpUtils::checkIp($this->clientIp($request), $allowedIps)) {
             return $this->deny();
         }
 
         return $next($request);
+    }
+
+    /**
+     * Behind Cloudflare Tunnel the TCP peer is cloudflared, so the real
+     * Safaricom address is only in CF-Connecting-IP. Trust that header only
+     * when the request came from a configured trusted proxy; otherwise a
+     * direct client could spoof its way past the allowlist.
+     */
+    private function clientIp(Request $request): string
+    {
+        $cloudflareIp = trim((string) $request->headers->get('CF-Connecting-IP', ''));
+
+        if ($cloudflareIp !== '' && $request->isFromTrustedProxy() && filter_var($cloudflareIp, FILTER_VALIDATE_IP)) {
+            return $cloudflareIp;
+        }
+
+        return (string) $request->ip();
     }
 
     private function deny(): Response

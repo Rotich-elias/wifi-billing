@@ -1,0 +1,5 @@
+# /etc/cron.d/wifi-billing
+# Use this instead of deploy/systemd/wifi-billing-scheduler.service, not both.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+* * * * * www-data cd /var/www/wifi-billing && /usr/bin/php artisan schedule:run >> /var/log/wifi-billing/scheduler.log 2>&1

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Voucher;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -130,6 +131,48 @@ class SecurityTest extends TestCase
 
         $this->postJson('/api/mpesa/callback/test-secret', $this->callbackPayload($payment, 20, 'RECEIPT-4'))
             ->assertOk();
+    }
+
+    public function test_callback_allowlist_uses_cloudflare_ip_through_a_trusted_proxy(): void
+    {
+        config(['mpesa.allowed_ips' => ['196.201.214.0/24']]);
+
+        $payment = $this->makePayment();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])
+            ->withHeaders(['CF-Connecting-IP' => '196.201.214.10'])
+            ->postJson('/api/mpesa/callback/test-secret', $this->callbackPayload($payment, 20, 'RECEIPT-CF-1'))
+            ->assertOk();
+
+        $this->assertSame(Payment::STATUS_PAID, $payment->fresh()->status);
+    }
+
+    public function test_callback_allowlist_ignores_cloudflare_header_from_an_untrusted_peer(): void
+    {
+        config(['mpesa.allowed_ips' => ['196.201.214.0/24']]);
+
+        $payment = $this->makePayment();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])
+            ->withHeaders(['CF-Connecting-IP' => '196.201.214.10'])
+            ->postJson('/api/mpesa/callback/test-secret', $this->callbackPayload($payment, 20, 'RECEIPT-CF-2'))
+            ->assertNotFound();
+
+        $this->assertSame(Payment::STATUS_PENDING, $payment->fresh()->status);
+    }
+
+    public function test_callback_allowlist_rejects_a_disallowed_cloudflare_ip(): void
+    {
+        config(['mpesa.allowed_ips' => ['196.201.214.0/24']]);
+
+        $payment = $this->makePayment();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])
+            ->withHeaders(['CF-Connecting-IP' => '198.51.100.10'])
+            ->postJson('/api/mpesa/callback/test-secret', $this->callbackPayload($payment, 20, 'RECEIPT-CF-3'))
+            ->assertNotFound();
+
+        $this->assertSame(Payment::STATUS_PENDING, $payment->fresh()->status);
     }
 
     public function test_wrong_amount_fails_the_payment_and_creates_no_voucher(): void
@@ -297,6 +340,48 @@ class SecurityTest extends TestCase
         $this->assertStringNotContainsString('username=', $location);
     }
 
+    public function test_private_and_local_hotspot_login_hosts_are_accepted(): void
+    {
+        $urls = [
+            'http://192.168.88.1/login',
+            'http://10.10.0.1/login',
+            'http://172.16.5.1/login',
+            'http://[::1]/login',
+            'http://hotspot/login',
+            'http://wifi.local/login',
+            'http://router.lan/login',
+            'http://192.168.1.1:8080/login',
+        ];
+
+        foreach ($urls as $url) {
+            $this->assertTrue(Voucher::isSafeLoginUrl($url), "Expected {$url} to be accepted");
+        }
+    }
+
+    public function test_public_login_hosts_still_require_the_allowlist(): void
+    {
+        $this->assertFalse(Voucher::isSafeLoginUrl('https://evil.example/login'));
+
+        config(['router.allowed_login_hosts' => ['hotspot.example.com']]);
+
+        $this->assertTrue(Voucher::isSafeLoginUrl('https://hotspot.example.com/login'));
+    }
+
+    public function test_private_login_host_can_receive_the_code(): void
+    {
+        $voucher = $this->makeActiveVoucher();
+
+        $response = $this->withoutMiddleware(ValidateCsrfToken::class)
+            ->post('/check', [
+                'code' => $voucher->code,
+                'login_url' => 'http://192.168.88.1/login',
+            ]);
+
+        $response->assertRedirect();
+        $this->assertStringContainsString('192.168.88.1', $response->headers->get('Location'));
+        $this->assertStringContainsString('username='.$voucher->code, $response->headers->get('Location'));
+    }
+
     public function test_expired_or_unused_codes_get_a_clear_error(): void
     {
         $this->withoutMiddleware(ValidateCsrfToken::class);
@@ -407,6 +492,98 @@ class SecurityTest extends TestCase
 
         $this->assertSame('expired', $voucher->fresh()->status);
         $this->assertFalse($driver->userExists($voucher->code));
+    }
+
+    public function test_expiry_command_retries_router_removal_for_an_already_expired_voucher(): void
+    {
+        $voucher = $this->makeActiveVoucher();
+        $driver = app(RouterDriver::class);
+
+        $driver->ensureUser($voucher);
+
+        // Simulate a previous expiry job that marked the voucher expired but
+        // exhausted its retries before the router user was removed.
+        $voucher->update([
+            'status' => 'expired',
+            'expires_at' => now()->subMinute(),
+            'mikrotik_synced' => true,
+        ]);
+
+        $this->artisan('vouchers:expire')->assertExitCode(0);
+
+        $this->assertFalse($driver->userExists($voucher->code));
+        $this->assertFalse($voucher->fresh()->mikrotik_synced);
+    }
+
+    public function test_voucher_expiry_is_wall_clock_from_activation(): void
+    {
+        $this->travelTo(now()->subHours(2));
+
+        $voucher = $this->makeActiveVoucher();
+
+        $this->travelBack();
+
+        $voucher->refresh();
+
+        $this->assertTrue($voucher->expires_at->equalTo($voucher->activated_at->copy()->addHour()));
+        $this->assertTrue($voucher->isExpired());
+    }
+
+    public function test_router_uptime_uses_plan_duration_not_the_session_timeout(): void
+    {
+        $plan = $this->makePlan([
+            'duration_hours' => 2,
+            'session_timeout' => 60,
+        ]);
+
+        $voucher = Voucher::create(['plan_id' => $plan->id, 'status' => 'unused']);
+        $voucher->activate();
+        $voucher->load('plan');
+
+        app(RouterDriver::class)->ensureUser($voucher);
+
+        $this->assertDatabaseHas('mock_router_users', [
+            'username' => $voucher->code,
+            'uptime_limit' => '02:00:00',
+        ]);
+    }
+
+    public function test_hotspot_hosts_command_reports_observed_hosts(): void
+    {
+        $payment = $this->makePayment();
+        $payment->update(['login_url' => 'http://192.168.88.1/login']);
+
+        $this->artisan('hotspot:hosts')->assertExitCode(0);
+    }
+
+    public function test_portal_records_the_hotspot_login_host(): void
+    {
+        $this->get('/?link-login-only='.urlencode('http://192.168.88.1/login'));
+
+        $observed = Cache::get('hotspot:observed-hosts');
+
+        $this->assertIsArray($observed);
+        $this->assertArrayHasKey('192.168.88.1', $observed);
+        $this->assertSame(1, $observed['192.168.88.1']['count']);
+    }
+
+    public function test_router_check_command_round_trips_a_test_user(): void
+    {
+        $this->makePlan();
+
+        $this->artisan('router:check')->assertExitCode(0);
+
+        $this->assertSame(0, DB::table('mock_router_users')->count());
+    }
+
+    public function test_router_check_expiry_option_removes_the_test_user(): void
+    {
+        $this->makePlan();
+
+        $this->artisan('router:check', ['--expiry' => true])->assertExitCode(0);
+
+        $this->assertSame(0, DB::table('mock_router_users')->count());
+        $this->assertSame(0, Voucher::withTrashed()->count());
     }
 
     public function test_admin_area_requires_an_administrator(): void

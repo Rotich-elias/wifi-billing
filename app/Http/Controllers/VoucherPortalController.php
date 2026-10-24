@@ -9,6 +9,7 @@ use App\Services\MpesaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
@@ -27,7 +28,57 @@ class VoucherPortalController extends Controller
             'orig_url' => $request->query('link-orig'),
         ];
 
+        $this->recordHotspotHost($hotspot['login_url']);
+
         return view('portal.index', compact('plans', 'hotspot'));
+    }
+
+    /**
+     * Remember the link-login-only host so `php artisan hotspot:hosts` can
+     * report it even before the customer completes a payment.
+     */
+    private function recordHotspotHost(?string $url): void
+    {
+        if (! $url) {
+            return;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '') {
+            return;
+        }
+
+        $host = rtrim(strtolower(trim($host, '[]')), '.');
+
+        if ($host === '') {
+            return;
+        }
+
+        try {
+            $observed = Cache::get('hotspot:observed-hosts', []);
+            $observed = is_array($observed) ? $observed : [];
+
+            $entry = $observed[$host] ?? [
+                'url' => $url,
+                'count' => 0,
+                'first_seen' => now()->toIso8601String(),
+            ];
+
+            $entry['url'] = $url;
+            $entry['count'] = ((int) ($entry['count'] ?? 0)) + 1;
+            $entry['last_seen'] = now()->toIso8601String();
+            $observed[$host] = $entry;
+
+            Cache::put('hotspot:observed-hosts', $observed, now()->addDays(30));
+
+            if (! Voucher::isSafeLoginUrl($url) && Cache::add('hotspot:warned:'.$host, true, now()->addHours(6))) {
+                Log::warning('Hotspot login host is not allowlisted', ['host' => $host]);
+            }
+        } catch (\Throwable $e) {
+            // Diagnostics must never break the customer portal.
+            Log::debug('Could not record hotspot host', ['error' => $e->getMessage()]);
+        }
     }
 
     public function purchase(Request $request): RedirectResponse

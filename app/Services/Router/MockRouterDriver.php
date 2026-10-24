@@ -60,7 +60,7 @@ class MockRouterDriver implements RouterDriver
 
     private function uptimeLimit(Plan $plan): string
     {
-        $seconds = $plan->session_timeout ?: ((int) $plan->duration_hours * 3600);
+        $seconds = $plan->uptimeSeconds();
 
         return sprintf(
             '%02d:%02d:%02d',

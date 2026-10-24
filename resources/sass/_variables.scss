@@ -1,7 +1,8 @@
 // Body
 $body-bg: #f8fafc;
 
-// Typography
-$font-family-sans-serif: 'Nunito', sans-serif;
+// Typography: system fonts only. Pre-login clients cannot reach the internet,
+// so do not depend on Google Fonts or Bunny Fonts.
+$font-family-sans-serif: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 $font-size-base: 0.9rem;
 $line-height-base: 1.6;

@@ -1,0 +1,30 @@
+# Example worker/scheduler containers for a Docker deployment.
+#
+# If the Laravel app already runs in a compose file, add these two services to
+# that file and point `image` at the same app image. This standalone example is
+# for hosts where the web app is managed separately (for example by systemd).
+#
+# The important part is `restart: unless-stopped`: without it, a lost callback
+# is never recovered after the worker exits.
+name: wifi-billing-workers
+
+services:
+  worker:
+    image: ${APP_IMAGE:-wifi-billing:latest}
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--timeout=120", "--max-time=3600"]
+    env_file:
+      - ../.env
+    volumes:
+      - ../storage:/var/www/html/storage
+
+  scheduler:
+    image: ${APP_IMAGE:-wifi-billing:latest}
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "schedule:work"]
+    env_file:
+      - ../.env
+    volumes:
+      - ../storage:/var/www/html/storage

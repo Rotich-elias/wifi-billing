@@ -118,6 +118,9 @@ class Voucher extends Model
             return;
         }
 
+        // Validity is wall-clock: the voucher expires duration_hours after
+        // activation, whether or not the customer was online. RouterOS gets
+        // the same duration as limit-uptime, but that is only a safety net.
         $this->activated_at = now();
         $this->expires_at = now()->addHours($this->plan->duration_hours);
         $this->status = 'active';
@@ -189,7 +192,7 @@ class Voucher extends Model
             return false;
         }
 
-        $host = strtolower($parts['host'] ?? '');
+        $host = rtrim(strtolower(trim((string) ($parts['host'] ?? ''), '[]')), '.');
 
         if ($host === '') {
             return false;
@@ -203,7 +206,46 @@ class Voucher extends Model
         $allowed[] = strtolower((string) config('router.host', ''));
         $allowed[] = strtolower((string) parse_url((string) config('app.url', ''), PHP_URL_HOST));
 
-        return in_array($host, array_filter($allowed), true);
+        if (in_array($host, array_filter($allowed), true)) {
+            return true;
+        }
+
+        // A MikroTik hotspot normally sends its LAN gateway IP (for example
+        // 192.168.88.1) or a local DNS name. Those are not public hosts, so
+        // they are safe to redirect to without an explicit allowlist entry.
+        // Public domains still require ROUTER_ALLOWED_LOGIN_HOSTS.
+        return self::isPrivateHost($host);
+    }
+
+    private static function isPrivateHost(string $host): bool
+    {
+        if (in_array($host, ['localhost', 'localhost.localdomain'], true)) {
+            return true;
+        }
+
+        // Single-label names such as "hotspot" or "wifi" cannot resolve on the
+        // public internet; they are resolved by the hotspot's own DNS.
+        if (! str_contains($host, '.')) {
+            return true;
+        }
+
+        // Local-only DNS suffixes used by hotspot routers.
+        foreach (['.local', '.lan', '.home', '.internal', '.localhost'] as $suffix) {
+            if (str_ends_with($host, $suffix)) {
+                return true;
+            }
+        }
+
+        if (! filter_var($host, FILTER_VALIDATE_IP)) {
+            return false;
+        }
+
+        // Private, loopback, link-local and reserved addresses are LAN-only.
+        return filter_var(
+            $host,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
+        ) === false;
     }
 
     public static function isSafeRedirectUrl(?string $url): bool

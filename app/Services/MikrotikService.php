@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MikrotikSyncLog;
+use App\Models\Plan;
 use App\Models\Voucher;
 use Exception;
 
@@ -20,12 +21,18 @@ class MikrotikService
 
     private string $password;
 
+    private bool $tls;
+
+    private bool $tlsVerify;
+
     public function __construct()
     {
         $this->host = config('mikrotik.host');
         $this->port = (int) config('mikrotik.port');
         $this->user = config('mikrotik.user');
         $this->password = config('mikrotik.password');
+        $this->tls = (bool) config('mikrotik.tls', false);
+        $this->tlsVerify = (bool) config('mikrotik.tls_verify', true);
     }
 
     public function connect(): bool
@@ -34,7 +41,28 @@ class MikrotikService
             $this->disconnect();
         }
 
-        $this->socket = @fsockopen($this->host, $this->port, $errno, $errstr, 10);
+        $context = stream_context_create([
+            'ssl' => [
+                'verify_peer' => $this->tlsVerify,
+                'verify_peer_name' => $this->tlsVerify,
+                'allow_self_signed' => ! $this->tlsVerify,
+            ],
+        ]);
+
+        $scheme = $this->tls ? 'tls' : 'tcp';
+        $host = str_contains($this->host, ':')
+            ? '['.trim($this->host, '[]').']'
+            : $this->host;
+
+        $this->socket = @stream_socket_client(
+            "{$scheme}://{$host}:{$this->port}",
+            $errno,
+            $errstr,
+            10,
+            STREAM_CLIENT_CONNECT,
+            $context,
+        );
+
         if (! $this->socket) {
             $this->socket = null;
             throw new Exception("Cannot connect to MikroTik: {$errstr} ({$errno})");
@@ -77,9 +105,9 @@ class MikrotikService
             '=server='.$server,
             '=profile='.$this->getOrCreateProfile($plan),
             '=comment=voucher_id:'.$voucher->id,
-            '=limit-uptime='.$this->secondsToMikrotik(
-                $plan->session_timeout ?: ((int) $plan->duration_hours * 3600)
-            ),
+            // Total usage cap, matching the voucher's wall-clock validity.
+            // session_timeout is a separate per-login cap in the profile.
+            '=limit-uptime='.$this->secondsToMikrotik($plan->uptimeSeconds()),
         ];
 
         if ($plan->data_limit) {
@@ -155,36 +183,48 @@ class MikrotikService
         }
     }
 
-    private function getOrCreateProfile(mixed $plan): string
+    private function getOrCreateProfile(Plan $plan): string
     {
         // A profile must be unique per plan: plans of the same type can have
         // different bandwidth limits and timeouts.
         $profileName = 'voucher_plan_'.$plan->id;
+
+        $settings = [
+            '=rate-limit='.$plan->bandwidth_up.'/'.$plan->bandwidth_down,
+            // session-timeout caps a single login; 00:00:00 means unlimited.
+            // The total usage cap lives on the user (limit-uptime) instead.
+            '=session-timeout='.($plan->sessionTimeoutSeconds()
+                ? $this->secondsToMikrotik($plan->sessionTimeoutSeconds())
+                : '00:00:00'),
+            '=idle-timeout='.($plan->idle_timeout !== null
+                ? $this->secondsToMikrotik((int) $plan->idle_timeout)
+                : '00:05:00'),
+        ];
 
         $this->write(['/ip/hotspot/user/profile/print', '?name='.$profileName]);
         $existing = $this->read();
 
         foreach ($existing as $item) {
             if (is_array($item) && isset($item['name'])) {
+                // Keep an existing profile in sync with admin plan edits.
+                $this->write(array_merge(
+                    ['/ip/hotspot/user/profile/set', '=numbers='.$profileName],
+                    $settings,
+                ));
+                $response = $this->read();
+
+                if ($this->isError($response)) {
+                    throw new Exception('Failed to update hotspot profile: '.implode(', ', $response));
+                }
+
                 return $profileName;
             }
         }
 
-        // Fall back to the plan duration so RouterOS itself enforces expiry
-        // even if the app-side removal never runs.
-        $sessionSeconds = $plan->session_timeout ?: ((int) $plan->duration_hours * 3600);
-        $sessionTimeout = $this->secondsToMikrotik($sessionSeconds);
-        $idleTimeout = $plan->idle_timeout
-            ? $this->secondsToMikrotik($plan->idle_timeout)
-            : '00:05:00';
-
-        $this->write([
-            '/ip/hotspot/user/profile/add',
-            '=name='.$profileName,
-            '=rate-limit='.$plan->bandwidth_up.'/'.$plan->bandwidth_down,
-            '=session-timeout='.$sessionTimeout,
-            '=idle-timeout='.$idleTimeout,
-        ]);
+        $this->write(array_merge(
+            ['/ip/hotspot/user/profile/add', '=name='.$profileName],
+            $settings,
+        ));
         $response = $this->read();
 
         if ($this->isError($response)) {

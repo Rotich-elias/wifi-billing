@@ -56,12 +56,20 @@ class VoucherService
     public function expireOverdue(): int
     {
         $count = 0;
-        Voucher::where('status', 'active')
-            ->where('expires_at', '<', now())
-            ->each(function (Voucher $voucher) use (&$count) {
-                ExpireVoucherJob::dispatch($voucher);
-                $count++;
+
+        Voucher::where(function ($query) {
+            $query->where(function ($query) {
+                $query->where('status', 'active')->where('expires_at', '<', now());
+            })->orWhere(function ($query) {
+                // Retry router removal if an earlier expiry/revoke job ran out
+                // of retries. Otherwise the router keeps accepting the code.
+                $query->whereIn('status', ['expired', 'revoked'])
+                    ->where('mikrotik_synced', true);
             });
+        })->each(function (Voucher $voucher) use (&$count) {
+            ExpireVoucherJob::dispatch($voucher);
+            $count++;
+        });
 
         return $count;
     }

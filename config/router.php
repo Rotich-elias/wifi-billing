@@ -16,6 +16,8 @@ return [
     'port' => (int) env('ROUTER_API_PORT', env('MIKROTIK_PORT', 8728)),
     'user' => env('ROUTER_USER', env('MIKROTIK_USER', 'admin')),
     'password' => env('ROUTER_PASSWORD', env('MIKROTIK_PASSWORD', '')),
+    'tls' => (bool) env('ROUTER_API_TLS', false),
+    'tls_verify' => (bool) env('ROUTER_API_TLS_VERIFY', true),
 
     'hotspot_server' => env('ROUTER_HOTSPOT_SERVER', env('MIKROTIK_HOTSPOT_SERVER', 'hotspot1')),
 

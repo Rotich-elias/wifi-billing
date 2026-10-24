@@ -8,13 +8,13 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 #[Signature('vouchers:expire')]
-#[Description('Mark overdue active vouchers as expired and remove from MikroTik')]
+#[Description('Expire overdue vouchers and retry removing expired/revoked users from MikroTik')]
 class ExpireVouchers extends Command
 {
     public function handle(VoucherService $service): int
     {
         $count = $service->expireOverdue();
-        $this->info("Expired {$count} voucher(s).");
+        $this->info("Queued {$count} voucher expiry/removal job(s).");
 
         return self::SUCCESS;
     }
