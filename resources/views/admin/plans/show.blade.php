@@ -30,6 +30,13 @@
                 </dl>
                 <div class="mt-3 d-flex gap-2">
                     <a href="{{ route('admin.plans.edit', $plan) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                    <form method="POST" action="{{ route('admin.plans.destroy', $plan) }}"
+                          onsubmit="return confirm('Delete this plan? Existing vouchers and payment history will be kept.')">
+                        @csrf @method('DELETE')
+                        <button class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

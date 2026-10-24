@@ -78,7 +78,8 @@ class Voucher extends Model
 
     public function plan(): BelongsTo
     {
-        return $this->belongsTo(Plan::class);
+        // Plans are soft-deleted so their vouchers and payment history survive.
+        return $this->belongsTo(Plan::class)->withTrashed();
     }
 
     public function payment(): HasOne

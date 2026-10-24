@@ -32,7 +32,8 @@ class Payment extends Model
 
     public function plan(): BelongsTo
     {
-        return $this->belongsTo(Plan::class);
+        // Keep showing the plan on old payments after it is soft-deleted.
+        return $this->belongsTo(Plan::class)->withTrashed();
     }
 
     public function voucher(): BelongsTo

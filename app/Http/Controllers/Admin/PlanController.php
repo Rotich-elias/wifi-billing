@@ -80,13 +80,17 @@ class PlanController extends Controller
 
     public function destroy(Plan $plan)
     {
-        if ($plan->vouchers()->withTrashed()->exists()) {
-            return back()->with('error', 'Cannot delete a plan that has vouchers. Deactivate it instead.');
-        }
+        // Soft delete: vouchers and payments keep their plan reference, so
+        // existing codes and financial history are never destroyed.
+        $voucherCount = $plan->vouchers()->withTrashed()->count();
 
         $plan->delete();
 
+        $message = $voucherCount > 0
+            ? "Plan deleted. {$voucherCount} existing voucher(s) and their payment history were kept."
+            : 'Plan deleted.';
+
         return redirect()->route('admin.plans.index')
-            ->with('success', 'Plan deleted.');
+            ->with('success', $message);
     }
 }

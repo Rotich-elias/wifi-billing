@@ -50,7 +50,7 @@
                             <i class="bi bi-pencil"></i>
                         </a>
                         <form method="POST" action="{{ route('admin.plans.destroy', $plan) }}" class="d-inline"
-                              onsubmit="return confirm('Delete this plan?')">
+                              onsubmit="return confirm('Delete this plan? Existing vouchers and payment history will be kept.')">
                             @csrf @method('DELETE')
                             <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
                         </form>

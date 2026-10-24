@@ -206,6 +206,16 @@ To clean up stale router users:
 php artisan vouchers:reconcile --fix
 ```
 
+### Deleting plans
+
+Plans are soft-deleted. Deleting a plan removes it from the admin and portal
+lists, but keeps its vouchers and payment history so existing customer codes
+continue to work. To restore an archived plan:
+
+```bash
+php artisan tinker --execute="App\Models\Plan::withTrashed()->find(ID)->restore();"
+```
+
 ## Production deployment
 
 The customer portal and admin panel should be reachable on the LAN. Only the
