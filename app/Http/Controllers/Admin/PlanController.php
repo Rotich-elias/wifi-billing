@@ -11,6 +11,7 @@ class PlanController extends Controller
     public function index()
     {
         $plans = Plan::withCount('vouchers')->latest()->paginate(15);
+
         return view('admin.plans.index', compact('plans'));
     }
 
@@ -22,16 +23,16 @@ class PlanController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'            => 'required|string|max:100',
-            'type'            => 'required|in:daily,weekly,monthly',
-            'duration_hours'  => 'required|integer|min:1',
-            'price'           => 'required|numeric|min:0',
-            'bandwidth_up'    => 'required|string|max:20',
-            'bandwidth_down'  => 'required|string|max:20',
+            'name' => 'required|string|max:100',
+            'type' => 'required|in:daily,weekly,monthly',
+            'duration_hours' => 'required|integer|min:1',
+            'price' => 'required|numeric|min:0',
+            'bandwidth_up' => 'required|string|max:20',
+            'bandwidth_down' => 'required|string|max:20',
             'session_timeout' => 'nullable|integer|min:0',
-            'idle_timeout'    => 'nullable|integer|min:0',
-            'description'     => 'nullable|string',
-            'is_active'       => 'boolean',
+            'idle_timeout' => 'nullable|integer|min:0',
+            'description' => 'nullable|string',
+            'is_active' => 'boolean',
         ]);
 
         $data['is_active'] = $request->boolean('is_active', true);
@@ -45,6 +46,7 @@ class PlanController extends Controller
     {
         $plan->loadCount('vouchers');
         $vouchers = $plan->vouchers()->with('payment')->latest()->paginate(20);
+
         return view('admin.plans.show', compact('plan', 'vouchers'));
     }
 
@@ -56,15 +58,15 @@ class PlanController extends Controller
     public function update(Request $request, Plan $plan)
     {
         $data = $request->validate([
-            'name'            => 'required|string|max:100',
-            'type'            => 'required|in:daily,weekly,monthly',
-            'duration_hours'  => 'required|integer|min:1',
-            'price'           => 'required|numeric|min:0',
-            'bandwidth_up'    => 'required|string|max:20',
-            'bandwidth_down'  => 'required|string|max:20',
+            'name' => 'required|string|max:100',
+            'type' => 'required|in:daily,weekly,monthly',
+            'duration_hours' => 'required|integer|min:1',
+            'price' => 'required|numeric|min:0',
+            'bandwidth_up' => 'required|string|max:20',
+            'bandwidth_down' => 'required|string|max:20',
             'session_timeout' => 'nullable|integer|min:0',
-            'idle_timeout'    => 'nullable|integer|min:0',
-            'description'     => 'nullable|string',
+            'idle_timeout' => 'nullable|integer|min:0',
+            'description' => 'nullable|string',
         ]);
 
         $data['is_active'] = $request->boolean('is_active', true);
@@ -76,11 +78,12 @@ class PlanController extends Controller
 
     public function destroy(Plan $plan)
     {
-        if ($plan->vouchers()->whereIn('status', ['unused', 'active'])->exists()) {
-            return back()->with('error', 'Cannot delete plan with active or unused vouchers.');
+        if ($plan->vouchers()->withTrashed()->exists()) {
+            return back()->with('error', 'Cannot delete a plan that has vouchers. Deactivate it instead.');
         }
 
         $plan->delete();
+
         return redirect()->route('admin.plans.index')
             ->with('success', 'Plan deleted.');
     }

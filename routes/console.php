@@ -12,6 +12,9 @@ Artisan::command('inspire', function () {
 
 Schedule::command('vouchers:expire')->everyFiveMinutes();
 
+// Report router/DB drift daily (run manually with --fix to clean up).
+Schedule::command('vouchers:reconcile')->dailyAt('03:00')->withoutOverlapping();
+
 // Send expiry SMS 1 hour before voucher expires
 Schedule::call(function () {
     $soon = Voucher::where('status', 'active')

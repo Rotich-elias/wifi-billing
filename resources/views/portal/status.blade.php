@@ -63,7 +63,7 @@
 @endif
 
 <div class="d-grid gap-2">
-    <a href="{{ route('portal.status', $voucher) }}" class="btn btn-outline-secondary btn-sm">
+    <a href="{{ route('portal.status', ['voucher' => $voucher->access_token]) }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-clockwise"></i> Refresh
     </a>
     <a href="{{ route('portal.index') }}" class="btn btn-outline-primary btn-sm">

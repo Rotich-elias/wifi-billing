@@ -6,6 +6,7 @@ use App\Jobs\ExpireVoucherJob;
 use App\Jobs\SyncVoucherToMikrotik;
 use App\Models\Plan;
 use App\Models\Voucher;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -13,14 +14,27 @@ class VoucherService
 {
     public function generate(Plan $plan, int $quantity = 1): Collection
     {
-        $batchId  = Str::uuid()->toString();
+        $batchId = Str::uuid()->toString();
         $vouchers = collect();
 
         for ($i = 0; $i < $quantity; $i++) {
-            $vouchers->push(Voucher::create([
-                'plan_id'  => $plan->id,
-                'batch_id' => $batchId,
-            ]));
+            $attempts = 0;
+
+            while (true) {
+                try {
+                    $vouchers->push(Voucher::create([
+                        'plan_id' => $plan->id,
+                        'batch_id' => $batchId,
+                    ]));
+
+                    break;
+                } catch (QueryException $e) {
+                    // Extremely unlikely code collision: retry with a new code.
+                    if (++$attempts >= 5 || ! str_contains($e->getMessage(), 'UNIQUE')) {
+                        throw $e;
+                    }
+                }
+            }
         }
 
         return $vouchers;

@@ -1,58 +1,105 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# WiFi Billing
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel application for selling WiFi hotspot vouchers via M-Pesa (Daraja STK Push), provisioning users on MikroTik RouterOS, and sending voucher codes by SMS (Africa's Talking).
 
-## About Laravel
+## Requirements
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- PHP 8.3+ with `pdo_sqlite` or `pdo_mysql`
+- Composer
+- A MikroTik router with the API (preferably API-SSL, port 8729) enabled
+- M-Pesa Daraja credentials (sandbox or production)
+- Africa's Talking credentials (optional; SMS is skipped without them)
+- Cron and a supervised queue worker
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Setup
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+cp .env.example .env
+php artisan key:generate
+# Edit .env: database, MikroTik, M-Pesa, Africa's Talking, ADMIN_PASSWORD
+php artisan migrate --seed
+npm install && npm run build   # only if you use the Vite assets
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+The seeder creates the admin account from `ADMIN_EMAIL` / `ADMIN_PASSWORD`. If `ADMIN_PASSWORD` is empty it generates one and prints it once — save it immediately and change it after first login.
 
-## Contributing
+## Required environment
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+See `.env.example`. The important groups are:
 
-## Code of Conduct
+| Group | Keys |
+|---|---|
+| App | `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL` (public HTTPS) |
+| Admin | `ADMIN_EMAIL`, `ADMIN_PASSWORD` |
+| MikroTik | `MIKROTIK_HOST`, `MIKROTIK_PORT`, `MIKROTIK_USER`, `MIKROTIK_PASSWORD`, `MIKROTIK_HOTSPOT_SERVER` |
+| M-Pesa | `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_PASSKEY`, `MPESA_ENVIRONMENT` |
+| Callback | `MPESA_CALLBACK_SECRET`, `MPESA_CALLBACK_URL`, optional `MPESA_ALLOWED_IPS` |
+| SMS | `AT_USERNAME`, `AT_API_KEY`, `AT_SENDER_ID` |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+`MPESA_CALLBACK_URL` must be a stable public HTTPS URL reachable by Safaricom and must include `?secret=...`. Each STK request sends this URL to Daraja, so no portal change is needed when the secret rotates — only a redeploy/config clear.
 
-## Security Vulnerabilities
+## Payment flow
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+1. Customer picks an active plan and enters a phone number.
+2. A `pending` payment and an `unused` voucher are created before the STK push.
+3. Daraja calls `POST /api/mpesa/callback?secret=...`.
+4. The callback is rejected unless the secret matches (and the IP is allowed, if configured), the payment is still pending, and the callback amount matches the charged amount.
+5. The payment becomes `completed`, the voucher is activated once, and router/SMS jobs are queued.
+6. The customer receives the code by SMS and can open the status page from the link shown after purchase.
 
-## License
+The status page is addressed by an unguessable per-voucher token (`/voucher/{token}/status`), never by numeric ID.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Expiry, queue and reconciliation
+
+```cron
+* * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Run a supervised queue worker:
+
+```bash
+php artisan queue:work --tries=3 --timeout=120
+```
+
+Scheduled jobs:
+
+- `vouchers:expire` every 5 minutes — marks overdue vouchers expired and removes the hotspot user.
+- `vouchers:reconcile` daily at 03:00 — reports router/DB drift and completed payments with unused vouchers.
+
+To clean up stale router users (users with no valid voucher):
+
+```bash
+php artisan vouchers:reconcile --fix
+```
+
+## Tests
+
+```bash
+php artisan test
+composer audit
+vendor/bin/pint --test
+```
+
+## Security notes
+
+- Admin routes require both `auth` and the `is_admin` flag.
+- M-Pesa callbacks require the shared secret; set `MPESA_ALLOWED_IPS` to Safaricom CIDRs in production.
+- Vouchers are never addressable by sequential ID.
+- Rotate `APP_KEY`, M-Pesa, MikroTik and SMS credentials after any suspected exposure. `APP_KEY` rotation invalidates sessions and signed URLs.
+- Prefer RouterOS API-SSL (8729) and a least-privilege API user; keep the API firewalled to the billing server.
+- Keep `.env` and the SQLite database at mode `600`.
+- For local development over plain HTTP, temporarily set `SESSION_SECURE_COOKIE=false`; keep it `true` behind HTTPS.
+
+## Deployment checklist
+
+- [ ] `APP_ENV=production`, `APP_DEBUG=false`, real `APP_URL`
+- [ ] `composer install --no-dev --optimize-autoloader`
+- [ ] `php artisan migrate --force`
+- [ ] `php artisan config:cache && php artisan route:cache && php artisan view:cache`
+- [ ] Queue worker supervised and running
+- [ ] Cron `schedule:run` installed
+- [ ] HTTPS + secure/encrypted session cookies
+- [ ] Backups scheduled and restore tested
+- [ ] `composer audit` clean
+- [ ] Admin password changed; `ADMIN_PASSWORD` not left in `.env` if unused

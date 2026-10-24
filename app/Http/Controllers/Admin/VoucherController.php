@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
 class VoucherController extends Controller
 {
     public function __construct(
-        private VoucherService  $voucherService,
+        private VoucherService $voucherService,
         private MikrotikService $mikrotikService,
     ) {}
 
@@ -31,13 +31,13 @@ class VoucherController extends Controller
         if ($request->filled('search')) {
             $query->where(function ($q) use ($request) {
                 $q->where('code', 'like', '%'.$request->search.'%')
-                  ->orWhere('customer_phone', 'like', '%'.$request->search.'%')
-                  ->orWhere('customer_name', 'like', '%'.$request->search.'%');
+                    ->orWhere('customer_phone', 'like', '%'.$request->search.'%')
+                    ->orWhere('customer_name', 'like', '%'.$request->search.'%');
             });
         }
 
         $vouchers = $query->paginate(20)->withQueryString();
-        $plans    = Plan::where('is_active', true)->get();
+        $plans = Plan::where('is_active', true)->get();
 
         return view('admin.vouchers.index', compact('vouchers', 'plans'));
     }
@@ -45,21 +45,23 @@ class VoucherController extends Controller
     public function create()
     {
         $plans = Plan::where('is_active', true)->get();
+
         return view('admin.vouchers.create', compact('plans'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'plan_id'  => 'required|exists:plans,id',
+            'plan_id' => 'required|exists:plans,id',
             'quantity' => 'required|integer|min:1|max:500',
         ]);
 
-        $plan     = Plan::findOrFail($request->plan_id);
+        $plan = Plan::findOrFail($request->plan_id);
         $vouchers = $this->voucherService->generate($plan, $request->quantity);
 
         if ($request->boolean('print_after')) {
             $batchId = $vouchers->first()->batch_id;
+
             return redirect()->route('admin.vouchers.printBatch', ['batch' => $batchId]);
         }
 
@@ -70,6 +72,7 @@ class VoucherController extends Controller
     public function show(Voucher $voucher)
     {
         $voucher->load('plan', 'payments', 'syncLogs');
+
         return view('admin.vouchers.show', compact('voucher'));
     }
 
@@ -81,7 +84,7 @@ class VoucherController extends Controller
     public function update(Request $request, Voucher $voucher)
     {
         $request->validate([
-            'customer_name'  => 'nullable|string|max:100',
+            'customer_name' => 'nullable|string|max:100',
             'customer_phone' => 'nullable|string|max:20',
         ]);
 
@@ -94,6 +97,7 @@ class VoucherController extends Controller
     public function destroy(Voucher $voucher)
     {
         $this->voucherService->revokeVoucher($voucher);
+
         return redirect()->route('admin.vouchers.index')
             ->with('success', 'Voucher revoked.');
     }
@@ -109,8 +113,9 @@ class VoucherController extends Controller
     public function bulkAction(Request $request)
     {
         $request->validate([
-            'action'      => 'required|in:revoke,delete,sync,print',
-            'voucher_ids' => 'required|array',
+            'action' => 'required|in:revoke,delete,sync,print',
+            'voucher_ids' => 'required|array|max:500',
+            'voucher_ids.*' => 'integer|exists:vouchers,id',
         ]);
 
         $vouchers = Voucher::with('plan')->whereIn('id', $request->voucher_ids)->get();
@@ -118,18 +123,26 @@ class VoucherController extends Controller
         if ($request->action === 'print') {
             $pdf = Pdf::loadView('pdf.vouchers', compact('vouchers'))
                 ->setPaper('a4', 'portrait');
+
             return $pdf->download('vouchers-selected.pdf');
         }
 
         foreach ($vouchers as $voucher) {
-            match($request->action) {
+            match ($request->action) {
                 'revoke' => $this->voucherService->revokeVoucher($voucher),
-                'delete' => $voucher->delete(),
-                'sync'   => SyncVoucherToMikrotik::dispatch($voucher, 'add'),
+                'delete' => $this->deleteVoucher($voucher),
+                'sync' => SyncVoucherToMikrotik::dispatch($voucher, 'add'),
             };
         }
 
         return back()->with('success', "Bulk {$request->action} applied to {$vouchers->count()} voucher(s).");
+    }
+
+    private function deleteVoucher(Voucher $voucher): void
+    {
+        // Remove router access first, then soft-delete so payment history survives.
+        $this->voucherService->revokeVoucher($voucher);
+        $voucher->delete();
     }
 
     public function printSingle(Voucher $voucher)
@@ -145,7 +158,7 @@ class VoucherController extends Controller
 
     public function printBatch(Request $request)
     {
-        $batchId  = $request->query('batch');
+        $batchId = $request->query('batch');
         $vouchers = Voucher::with('plan')
             ->where('batch_id', $batchId)
             ->get();
@@ -155,7 +168,7 @@ class VoucherController extends Controller
         $pdf = Pdf::loadView('pdf.vouchers', compact('vouchers'))
             ->setPaper('a4', 'portrait');
 
-        return $pdf->stream("vouchers-batch.pdf");
+        return $pdf->stream('vouchers-batch.pdf');
     }
 
     public function printFiltered(Request $request)

@@ -11,7 +11,8 @@ class SendVoucherSms implements ShouldQueue
 {
     use Queueable;
 
-    public int $tries   = 3;
+    public int $tries = 3;
+
     public int $backoff = 30;
 
     public function __construct(public readonly Voucher $voucher) {}

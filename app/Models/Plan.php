@@ -26,11 +26,11 @@ class Plan extends Model
 
     public function getDurationLabelAttribute(): string
     {
-        return match($this->type) {
-            'daily'   => "{$this->duration_hours}h",
-            'weekly'  => '7 days',
+        return match ($this->type) {
+            'daily' => "{$this->duration_hours}h",
+            'weekly' => '7 days',
             'monthly' => '30 days',
-            default   => "{$this->duration_hours}h",
+            default => "{$this->duration_hours}h",
         };
     }
 }

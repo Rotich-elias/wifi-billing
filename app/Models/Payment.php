@@ -15,8 +15,8 @@ class Payment extends Model
     ];
 
     protected $casts = [
-        'amount'       => 'decimal:2',
-        'paid_at'      => 'datetime',
+        'amount' => 'decimal:2',
+        'paid_at' => 'datetime',
         'raw_callback' => 'array',
     ];
 
@@ -27,12 +27,12 @@ class Payment extends Model
 
     public function getStatusBadgeAttribute(): string
     {
-        return match($this->status) {
-            'pending'   => 'warning',
+        return match ($this->status) {
+            'pending' => 'warning',
             'completed' => 'success',
-            'failed'    => 'danger',
+            'failed' => 'danger',
             'cancelled' => 'secondary',
-            default     => 'secondary',
+            default => 'secondary',
         };
     }
 }

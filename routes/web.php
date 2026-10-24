@@ -10,15 +10,21 @@ use Illuminate\Support\Facades\Route;
 
 // Customer portal
 Route::get('/', [VoucherPortalController::class, 'index'])->name('portal.index');
-Route::post('/purchase', [VoucherPortalController::class, 'purchase'])->name('portal.purchase');
-Route::post('/check', [VoucherPortalController::class, 'check'])->name('portal.check');
-Route::get('/voucher/{voucher}/status', [VoucherPortalController::class, 'status'])->name('portal.status');
+Route::post('/purchase', [VoucherPortalController::class, 'purchase'])
+    ->middleware('throttle:purchase')
+    ->name('portal.purchase');
+Route::post('/check', [VoucherPortalController::class, 'check'])
+    ->middleware('throttle:voucher-check')
+    ->name('portal.check');
+// Status pages are addressed by an unguessable access token, never by ID.
+Route::get('/voucher/{voucher:access_token}/status', [VoucherPortalController::class, 'status'])
+    ->name('portal.status');
 
 // Auth
 Auth::routes(['register' => false]);
 
 // Admin panel
-Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::resource('plans', PlanController::class);

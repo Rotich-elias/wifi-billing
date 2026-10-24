@@ -25,6 +25,6 @@ Full Laravel 11 application scaffolded at /home/smith/Desktop/wifi-billing.
 4. Set MikroTik IP/credentials in `.env`
 5. Cron: `* * * * * php artisan schedule:run` (expires vouchers every 5 min)
 
-**Admin login:** admin@wifi.local / admin123 (after seed)
+**Admin login:** `admin@wifi.local` — the default password has been rotated. Retrieve the current password from the deployment secret store; never store credentials in this file.
 
 **How to apply:** Reference this when continuing work on this project — migrations, routes, and views are already built.

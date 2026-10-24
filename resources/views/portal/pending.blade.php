@@ -15,14 +15,12 @@
             <div class="col-7 fw-semibold">{{ $voucher->plan->name }}</div>
             <div class="col-5 text-muted">Amount</div>
             <div class="col-7 fw-semibold">KES {{ number_format($payment->amount, 2) }}</div>
-            <div class="col-5 text-muted">Voucher Code</div>
-            <div class="col-7 font-monospace fw-bold text-primary">{{ $voucher->code }}</div>
         </div>
     </div>
 
-    <p class="text-muted small">After payment, use the voucher code above to connect to WiFi.</p>
+    <p class="text-muted small">After payment is confirmed, your voucher code will be sent to your phone by SMS. You can also refresh the status page below.</p>
 
-    <a href="{{ route('portal.status', $voucher) }}" class="btn btn-primary w-100 mb-2">
+    <a href="{{ route('portal.status', ['voucher' => $voucher->access_token]) }}" class="btn btn-primary w-100 mb-2">
         <i class="bi bi-arrow-clockwise me-1"></i> Check Payment Status
     </a>
     <a href="{{ route('portal.index') }}" class="btn btn-outline-secondary w-100">

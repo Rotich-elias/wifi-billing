@@ -13,10 +13,12 @@ return [
     |
     */
 
-    'name'              => env('APP_NAME', 'Laravel'),
-    'business_name'     => env('BUSINESS_NAME', env('APP_NAME', 'WiFi Hotspot')),
-    'business_phone'    => env('BUSINESS_PHONE', ''),
+    'name' => env('APP_NAME', 'Laravel'),
+    'business_name' => env('BUSINESS_NAME', env('APP_NAME', 'WiFi Hotspot')),
+    'business_phone' => env('BUSINESS_PHONE', ''),
     'business_location' => env('BUSINESS_LOCATION', ''),
+    'admin_email' => env('ADMIN_EMAIL', 'admin@wifi.local'),
+    'admin_password' => env('ADMIN_PASSWORD'),
 
     /*
     |--------------------------------------------------------------------------

@@ -15,6 +15,7 @@ class ExpireVouchers extends Command
     {
         $count = $service->expireOverdue();
         $this->info("Expired {$count} voucher(s).");
+
         return self::SUCCESS;
     }
 }

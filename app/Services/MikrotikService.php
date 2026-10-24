@@ -9,29 +9,35 @@ use Exception;
 class MikrotikService
 {
     private $socket;
+
     private bool $connected = false;
+
     private string $host;
+
     private int $port;
+
     private string $user;
+
     private string $password;
 
     public function __construct()
     {
-        $this->host     = config('mikrotik.host');
-        $this->port     = (int) config('mikrotik.port');
-        $this->user     = config('mikrotik.user');
+        $this->host = config('mikrotik.host');
+        $this->port = (int) config('mikrotik.port');
+        $this->user = config('mikrotik.user');
         $this->password = config('mikrotik.password');
     }
 
     public function connect(): bool
     {
         $this->socket = @fsockopen($this->host, $this->port, $errno, $errstr, 10);
-        if (!$this->socket) {
+        if (! $this->socket) {
             throw new Exception("Cannot connect to MikroTik: {$errstr} ({$errno})");
         }
         stream_set_timeout($this->socket, 10);
         $this->connected = true;
         $this->login();
+
         return true;
     }
 
@@ -39,7 +45,7 @@ class MikrotikService
     {
         $this->write(['/login', '=name='.$this->user, '=password='.$this->password]);
         $response = $this->read();
-        if (!isset($response[0]) || $response[0] !== '!done') {
+        if (! isset($response[0]) || $response[0] !== '!done') {
             throw new Exception('MikroTik login failed');
         }
     }
@@ -54,7 +60,7 @@ class MikrotikService
 
     public function addHotspotUser(Voucher $voucher): array
     {
-        $plan   = $voucher->plan;
+        $plan = $voucher->plan;
         $server = config('mikrotik.hotspot_server');
 
         $command = [
@@ -83,7 +89,11 @@ class MikrotikService
     public function removeHotspotUser(string $username): void
     {
         $this->write(['/ip/hotspot/user/remove', '=numbers='.$username]);
-        $this->read();
+        $response = $this->read();
+
+        if ($this->isError($response)) {
+            throw new Exception('Failed to remove hotspot user: '.implode(', ', $response));
+        }
     }
 
     public function getHotspotUser(string $username): ?array
@@ -96,21 +106,48 @@ class MikrotikService
                 return $item;
             }
         }
+
         return null;
     }
 
     public function getActiveUsers(): array
     {
         $this->write(['/ip/hotspot/active/print']);
+
         return $this->readArray();
+    }
+
+    public function getHotspotUsers(): array
+    {
+        $this->connect();
+
+        try {
+            $this->write(['/ip/hotspot/user/print']);
+
+            return $this->readArray();
+        } finally {
+            $this->disconnect();
+        }
+    }
+
+    public function removeHotspotUserByName(string $username): void
+    {
+        $this->connect();
+
+        try {
+            $this->removeHotspotUser($username);
+        } finally {
+            $this->disconnect();
+        }
     }
 
     private function getOrCreateProfile(mixed $plan): string
     {
-        $profileName = 'voucher_'.$plan->type;
-        $server      = config('mikrotik.hotspot_server');
+        // A profile must be unique per plan: plans of the same type can have
+        // different bandwidth limits and timeouts.
+        $profileName = 'voucher_plan_'.$plan->id;
 
-        $this->write(['/ip/hotspot/user/profile/print', '?name='.$profileName, '?server='.$server]);
+        $this->write(['/ip/hotspot/user/profile/print', '?name='.$profileName]);
         $existing = $this->read();
 
         foreach ($existing as $item) {
@@ -119,9 +156,10 @@ class MikrotikService
             }
         }
 
-        $sessionTimeout = $plan->session_timeout
-            ? $this->secondsToMikrotik($plan->session_timeout)
-            : '00:00:00';
+        // Fall back to the plan duration so RouterOS itself enforces expiry
+        // even if the app-side removal never runs.
+        $sessionSeconds = $plan->session_timeout ?: ((int) $plan->duration_hours * 3600);
+        $sessionTimeout = $this->secondsToMikrotik($sessionSeconds);
         $idleTimeout = $plan->idle_timeout
             ? $this->secondsToMikrotik($plan->idle_timeout)
             : '00:05:00';
@@ -129,12 +167,15 @@ class MikrotikService
         $this->write([
             '/ip/hotspot/user/profile/add',
             '=name='.$profileName,
-            '=server='.$server,
             '=rate-limit='.$plan->bandwidth_up.'/'.$plan->bandwidth_down,
             '=session-timeout='.$sessionTimeout,
             '=idle-timeout='.$idleTimeout,
         ]);
-        $this->read();
+        $response = $this->read();
+
+        if ($this->isError($response)) {
+            throw new Exception('Failed to create hotspot profile: '.implode(', ', $response));
+        }
 
         return $profileName;
     }
@@ -169,17 +210,24 @@ class MikrotikService
     private function readLength(): int
     {
         $b = ord(fread($this->socket, 1));
-        if ($b < 0x80) return $b;
-        if ($b < 0xC0) return (($b & 0x3F) << 8) + ord(fread($this->socket, 1));
+        if ($b < 0x80) {
+            return $b;
+        }
+        if ($b < 0xC0) {
+            return (($b & 0x3F) << 8) + ord(fread($this->socket, 1));
+        }
         if ($b < 0xE0) {
             $b2 = fread($this->socket, 2);
+
             return (($b & 0x1F) << 16) + (ord($b2[0]) << 8) + ord($b2[1]);
         }
         if ($b < 0xF0) {
             $b2 = fread($this->socket, 3);
+
             return (($b & 0x0F) << 24) + (ord($b2[0]) << 16) + (ord($b2[1]) << 8) + ord($b2[2]);
         }
         $b2 = fread($this->socket, 4);
+
         return (ord($b2[0]) << 24) + (ord($b2[1]) << 16) + (ord($b2[2]) << 8) + ord($b2[3]);
     }
 
@@ -187,7 +235,7 @@ class MikrotikService
     {
         $result = [];
         while (true) {
-            $len  = $this->readLength();
+            $len = $this->readLength();
             $word = $len > 0 ? fread($this->socket, $len) : '';
 
             if ($word === '!done') {
@@ -196,6 +244,7 @@ class MikrotikService
             }
             if ($word === '!re') {
                 $result[] = $this->readSentence();
+
                 continue;
             }
             if ($word === '!trap' || $word === '!fatal') {
@@ -207,6 +256,7 @@ class MikrotikService
                 break;
             }
         }
+
         return $result;
     }
 
@@ -215,25 +265,29 @@ class MikrotikService
         $data = [];
         while (true) {
             $len = $this->readLength();
-            if ($len === 0) break;
+            if ($len === 0) {
+                break;
+            }
             $word = fread($this->socket, $len);
             if (str_starts_with($word, '=')) {
                 $parts = explode('=', ltrim($word, '='), 2);
                 $data[$parts[0]] = $parts[1] ?? '';
             }
         }
+
         return $data;
     }
 
     private function readArray(): array
     {
         $result = [];
-        $raw    = $this->read();
+        $raw = $this->read();
         foreach ($raw as $item) {
             if (is_array($item)) {
                 $result[] = $item;
             }
         }
+
         return $result;
     }
 
@@ -247,6 +301,7 @@ class MikrotikService
         $h = intdiv($seconds, 3600);
         $m = intdiv($seconds % 3600, 60);
         $s = $seconds % 60;
+
         return sprintf('%02d:%02d:%02d', $h, $m, $s);
     }
 
@@ -260,31 +315,35 @@ class MikrotikService
             } elseif ($action === 'remove') {
                 $this->removeHotspotUser($voucher->code);
             }
-
-            $voucher->update([
-                'mikrotik_synced'    => true,
-                'mikrotik_synced_at' => now(),
-                'mikrotik_user'      => $voucher->code,
-            ]);
-
-            MikrotikSyncLog::create([
-                'voucher_id' => $voucher->id,
-                'action'     => $action,
-                'status'     => 'success',
-                'message'    => "Voucher {$action} successful",
-            ]);
-
-            return true;
         } catch (Exception $e) {
             MikrotikSyncLog::create([
                 'voucher_id' => $voucher->id,
-                'action'     => $action,
-                'status'     => 'failed',
-                'message'    => $e->getMessage(),
+                'action' => $action,
+                'status' => 'failed',
+                'message' => $e->getMessage(),
             ]);
-            return false;
+
+            // Rethrow so the queued job retries instead of silently succeeding.
+            throw $e;
         } finally {
             $this->disconnect();
         }
+
+        $isAdded = $action === 'add';
+
+        $voucher->update([
+            'mikrotik_synced' => $isAdded,
+            'mikrotik_synced_at' => now(),
+            'mikrotik_user' => $isAdded ? $voucher->code : null,
+        ]);
+
+        MikrotikSyncLog::create([
+            'voucher_id' => $voucher->id,
+            'action' => $action,
+            'status' => 'success',
+            'message' => "Voucher {$action} successful",
+        ]);
+
+        return true;
     }
 }

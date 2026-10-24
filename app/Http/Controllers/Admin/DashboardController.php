@@ -12,14 +12,14 @@ class DashboardController extends Controller
     public function index()
     {
         $stats = [
-            'total_vouchers'   => Voucher::count(),
-            'unused_vouchers'  => Voucher::where('status', 'unused')->count(),
-            'active_vouchers'  => Voucher::where('status', 'active')->count(),
+            'total_vouchers' => Voucher::count(),
+            'unused_vouchers' => Voucher::where('status', 'unused')->count(),
+            'active_vouchers' => Voucher::where('status', 'active')->count(),
             'expired_vouchers' => Voucher::where('status', 'expired')->count(),
-            'total_revenue'    => Payment::where('status', 'completed')->sum('amount'),
-            'today_revenue'    => Payment::where('status', 'completed')
+            'total_revenue' => Payment::where('status', 'completed')->sum('amount'),
+            'today_revenue' => Payment::where('status', 'completed')
                 ->whereDate('paid_at', today())->sum('amount'),
-            'total_plans'      => Plan::where('is_active', true)->count(),
+            'total_plans' => Plan::where('is_active', true)->count(),
             'pending_payments' => Payment::where('status', 'pending')->count(),
         ];
 
