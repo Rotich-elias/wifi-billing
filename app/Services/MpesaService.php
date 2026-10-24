@@ -16,6 +16,17 @@ use Illuminate\Support\Facades\Log;
 
 class MpesaService
 {
+    /**
+     * How long a pending payment may stay unresolved before recovery expires it.
+     */
+    private const PENDING_GRACE_MINUTES = 5;
+
+    /**
+     * Very old pending rows are expired without calling Daraja. This stops a
+     * handful of stuck rows from being queried forever (and hitting rate limits).
+     */
+    private const PENDING_MAX_QUERY_MINUTES = 60;
+
     private string $consumerKey;
 
     private string $consumerSecret;
@@ -386,12 +397,17 @@ class MpesaService
             return;
         }
 
+        // Expire abandoned rows without asking Daraja. These can never be paid
+        // and would otherwise be queried on every scheduler run indefinitely.
+        if ($payment->created_at->lt(now()->subMinutes(self::PENDING_MAX_QUERY_MINUTES))) {
+            $this->expirePending($payment, 'Payment expired before M-Pesa confirmation could be checked');
+
+            return;
+        }
+
         if (! $payment->checkout_request_id) {
-            if ($payment->created_at->lt(now()->subMinutes(5))) {
-                $payment->update([
-                    'status' => Payment::STATUS_EXPIRED,
-                    'result_desc' => 'No STK request was created',
-                ]);
+            if ($payment->created_at->lt(now()->subMinutes(self::PENDING_GRACE_MINUTES))) {
+                $this->expirePending($payment, 'No STK request was created');
             }
 
             return;
@@ -404,6 +420,15 @@ class MpesaService
                 'payment_id' => $payment->id,
                 'error' => $e->getMessage(),
             ]);
+
+            // Keep retrying briefly, then stop. A Daraja outage must not leave
+            // a payment pending forever.
+            if ($payment->created_at->lt(now()->subMinutes(self::PENDING_GRACE_MINUTES))) {
+                $this->expirePending(
+                    $payment,
+                    'M-Pesa status could not be confirmed before timeout: '.$e->getMessage(),
+                );
+            }
 
             return;
         }
@@ -433,14 +458,38 @@ class MpesaService
             return;
         }
 
-        if ($payment->created_at->lt(now()->subMinutes(5))) {
-            $payment->update([
-                'status' => Payment::STATUS_EXPIRED,
-                'result_code' => (string) $resultCode,
-                'result_desc' => $result['ResultDesc'] ?? 'Timed out',
-                'raw_callback' => $result,
-            ]);
+        if ($payment->created_at->lt(now()->subMinutes(self::PENDING_GRACE_MINUTES))) {
+            $this->expirePending(
+                $payment,
+                $result['ResultDesc'] ?? 'Timed out',
+                $resultCode === null ? null : (string) $resultCode,
+                $result,
+            );
         }
+    }
+
+    /**
+     * Expire a payment only if it is still pending. This guards against a
+     * callback that completes the payment while recovery is running.
+     */
+    private function expirePending(Payment $payment, string $description, ?string $resultCode = null, ?array $raw = null): void
+    {
+        DB::transaction(function () use ($payment, $description, $resultCode, $raw) {
+            $locked = Payment::whereKey($payment->id)->lockForUpdate()->first();
+
+            if (! $locked || $locked->status !== Payment::STATUS_PENDING) {
+                return;
+            }
+
+            $locked->update([
+                'status' => Payment::STATUS_EXPIRED,
+                'result_code' => $resultCode,
+                'result_desc' => $description,
+                'raw_callback' => $raw,
+            ]);
+        });
+
+        $payment->refresh();
     }
 
     public function querySTKStatus(Payment $payment): array

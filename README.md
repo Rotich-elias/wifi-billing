@@ -173,7 +173,10 @@ by `www-data`.
 Scheduled jobs:
 
 - `payments:recover` every minute — queries Daraja for pending payments older
-  than 60 seconds and expires payments older than about 5 minutes.
+  than 60 seconds and expires payments older than about 5 minutes. If the Daraja
+  query itself fails (for example `429` or `500`), the payment is expired once
+  it passes that grace period, so it is not retried forever. Pending rows older
+  than 60 minutes are expired without querying Daraja at all.
 - `vouchers:expire` every minute — marks overdue vouchers expired, removes the
   hotspot user, and retries removal for expired/revoked vouchers still marked
   as synced.
