@@ -81,6 +81,35 @@ class PaymentRecoveryTest extends TestCase
         $this->assertSame(0, Voucher::count());
     }
 
+    public function test_a_payment_is_completed_when_the_stk_query_confirms_success(): void
+    {
+        // The STK query response never includes a receipt number.
+        Http::fake([
+            'sandbox.safaricom.co.ke/oauth/v1/generate*' => Http::response(['access_token' => 'token'], 200),
+            'sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query' => Http::response([
+                'ResponseCode' => '0',
+                'MerchantRequestID' => '29115-34620561-1',
+                'CheckoutRequestID' => 'ws_CO_CONFIRMED',
+                'ResultCode' => '0',
+                'ResultDesc' => 'The service request is successfully processed',
+            ]),
+        ]);
+
+        $payment = $this->makePayment();
+        $payment->forceFill(['created_at' => now()->subMinutes(2)])->save();
+
+        $this->artisan('payments:recover')->assertExitCode(0);
+
+        $payment->refresh();
+
+        $this->assertSame(Payment::STATUS_PAID, $payment->status);
+        $this->assertSame('0', $payment->result_code);
+        $this->assertNotNull($payment->paid_at);
+        $this->assertSame(1, Voucher::count());
+        $this->assertNotNull($payment->voucher);
+        $this->assertSame('active', $payment->voucher->status);
+    }
+
     private function makePayment(): Payment
     {
         $plan = Plan::create([

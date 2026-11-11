@@ -228,9 +228,10 @@ class MpesaService
         array $metadata = [],
         ?array $raw = null,
         bool $verifyAmount = true,
+        bool $requireReceipt = true,
     ): ?Voucher {
         try {
-            $voucher = DB::transaction(function () use ($payment, $metadata, $raw, $verifyAmount) {
+            $voucher = DB::transaction(function () use ($payment, $metadata, $raw, $verifyAmount, $requireReceipt) {
                 $locked = Payment::whereKey($payment->id)->lockForUpdate()->first();
 
                 if (! $locked || $locked->status !== Payment::STATUS_PENDING) {
@@ -261,9 +262,11 @@ class MpesaService
 
                 $receipt = $metadata['MpesaReceiptNumber'] ?? null;
 
-                // A success without a receipt is not enough evidence to grant
-                // access. Leave the payment pending so recovery can retry.
-                if (empty($receipt)) {
+                // A success callback without a receipt is not enough evidence
+                // to grant access: leave the payment pending so recovery can
+                // retry. The STK query API never returns a receipt, so that
+                // path passes requireReceipt=false and trusts ResultCode 0.
+                if (empty($receipt) && $requireReceipt) {
                     Log::warning('M-Pesa success response without a receipt', [
                         'payment_id' => $locked->id,
                     ]);
@@ -271,7 +274,7 @@ class MpesaService
                     return null;
                 }
 
-                if (Payment::where('mpesa_receipt', $receipt)
+                if (filled($receipt) && Payment::where('mpesa_receipt', $receipt)
                     ->whereKeyNot($locked->id)
                     ->exists()) {
                     Log::alert('Duplicate M-Pesa receipt in callback', [
@@ -436,9 +439,12 @@ class MpesaService
         $resultCode = $result['ResultCode'] ?? null;
 
         if ((string) $resultCode === '0') {
+            // The STK query API confirms the transaction succeeded but does
+            // not return a receipt number, so a receipt cannot be required
+            // here; the query result itself is the evidence of payment.
             $voucher = $this->completePayment($payment, [
                 'MpesaReceiptNumber' => $result['MpesaReceiptNumber'] ?? null,
-            ], raw: $result, verifyAmount: false);
+            ], raw: $result, verifyAmount: false, requireReceipt: false);
 
             if ($voucher) {
                 $this->queueFulfilment($voucher);
