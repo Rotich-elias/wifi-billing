@@ -1,4 +1,4 @@
-# WiFi Billing — Remaining Security & Reliability Work
+# Teto_Net — Remaining Security & Reliability Work
 
 **Audit date:** 2026-10-24
 **Scope:** Laravel application in this repo (security, payment flow, voucher lifecycle, operations). Host OS / network not included.
@@ -71,10 +71,10 @@
   - Fix: optional TOTP for admins, shorter admin session lifetime, logout-all-devices, audit log of admin actions (voucher revoke/delete, plan changes).
   - Done when: admin actions are attributable and protected by a second factor.
 
-- [ ] **P2-08 🔵 Remove unused scaffolding**
-  - Where: `app/Http/Controllers/HomeController.php`, `resources/views/home.blade.php`, `resources/views/welcome.blade.php`, `app/Http/Controllers/Auth/RegisterController.php`
-  - Fix: delete or explicitly disable; ensure no dormant registration route can be re-enabled accidentally.
-  - Done when: no dead auth/registration surface remains.
+- [x] **P2-08 🔵 Remove unused scaffolding**
+  - Removed: `app/Http/Controllers/HomeController.php`, `resources/views/home.blade.php`, `resources/views/welcome.blade.php`, `app/Http/Controllers/Auth/RegisterController.php`, `resources/css/app.css` and the unused Tailwind npm packages.
+  - Registration stays explicitly disabled via `Auth::routes(['register' => false])`; `VerificationController` is retained for optional email verification.
+  - Done when: no dead auth/registration landing surface remains.
 
 - [ ] **P2-10 🔵 Make printing safe and bounded**
   - Where: `app/Http/Controllers/Admin/VoucherController.php`

@@ -15,7 +15,7 @@ return new class extends Migration
 
         // The account created by DatabaseSeeder is the administrator.
         DB::table('users')
-            ->where('email', 'admin@wifi.local')
+            ->where('email', 'admin@teto.co.ke')
             ->update(['is_admin' => true]);
     }
 

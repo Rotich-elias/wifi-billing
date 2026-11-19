@@ -1,3 +1,3 @@
 # Memory Index
 
-- [WiFi Billing Project](project_wifi_billing.md) — Full Laravel WiFi hotspot voucher billing system with MikroTik + M-Pesa integration
+- [Teto_Net Project](project_teto_net.md) — Full Laravel WiFi hotspot voucher billing system with MikroTik + M-Pesa integration

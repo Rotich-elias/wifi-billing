@@ -8,14 +8,14 @@
     @include('partials.favicon')
     @vite(['resources/sass/app.scss', 'resources/js/app.js'])
     <style>
-        .sidebar { width: 240px; min-height: 100vh; background: #1a1a2e; }
+        .sidebar { width: 240px; min-height: 100vh; background: #042F2E; }
         .sidebar .nav-link { color: rgba(255,255,255,.7); padding: .5rem 1.25rem; border-radius: 6px; margin: 2px 8px; }
         .sidebar .nav-link:hover, .sidebar .nav-link.active { color: #fff; background: rgba(255,255,255,.1); }
         .sidebar .nav-link i { width: 20px; }
         .sidebar-brand { color: #fff; font-weight: 700; font-size: 1.1rem; }
-        .main-content { flex: 1; background: #f8f9fa; min-height: 100vh; }
+        .main-content { flex: 1; background: #F8FAFC; min-height: 100vh; }
         .stat-card { border-left: 4px solid; border-radius: 8px; }
-        .stat-card.primary { border-color: #0d6efd; }
+        .stat-card.primary { border-color: #0D9488; }
         .stat-card.success { border-color: #198754; }
         .stat-card.warning { border-color: #ffc107; }
         .stat-card.danger  { border-color: #dc3545; }
@@ -26,7 +26,7 @@
 <div class="d-flex">
     <div class="sidebar d-flex flex-column py-3">
         <a href="{{ route('admin.dashboard') }}" class="sidebar-brand text-decoration-none px-4 pb-3 d-flex align-items-center gap-2">
-            <img src="/images/kirwa-net-mark.png" alt="" width="32" height="32" class="flex-shrink-0">
+            <img src="/images/teto-net-mark.png" alt="" width="32" height="32" class="flex-shrink-0">
             <span>{{ config('app.name') }}</span>
         </a>
         <hr class="border-secondary my-1">

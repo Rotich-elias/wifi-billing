@@ -1,9 +1,9 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "teto/teto-net",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "Teto_Net — WiFi hotspot voucher billing via M-Pesa and MikroTik.",
+    "keywords": ["teto-net", "wifi", "billing", "mpesa", "mikrotik"],
     "license": "MIT",
     "require": {
         "php": "^8.3",

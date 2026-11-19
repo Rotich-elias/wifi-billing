@@ -33,7 +33,7 @@
         position: absolute;
         top: 0; left: 0;
         width: 100%; height: 5px;
-        background: repeating-linear-gradient(90deg, #1173b8 0, #1173b8 8px, transparent 8px, transparent 14px);
+        background: repeating-linear-gradient(90deg, #0F766E 0, #0F766E 8px, #F59E0B 8px, #F59E0B 10px, transparent 10px, transparent 14px);
     }
 
     .header {
@@ -58,7 +58,7 @@
         margin: 3mm 0;
     }
     .code-label { font-size: 7px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
-    .code { font-size: 18px; font-weight: bold; color: #1173b8; letter-spacing: 2px; font-family: "Courier New", monospace; }
+    .code { font-size: 18px; font-weight: bold; color: #0F766E; letter-spacing: 2px; font-family: "Courier New", monospace; }
 
     .details { font-size: 8px; color: #555; margin-top: 2mm; }
     .details table { width: 100%; }
@@ -76,7 +76,7 @@
 
     .price-badge {
         display: inline-block;
-        background: #1173b8;
+        background: #0F766E;
         color: #fff;
         border-radius: 10px;
         padding: 1px 6px;
@@ -96,7 +96,7 @@
             <td>
                 <div class="voucher">
                     <div class="header">
-                        <img src="{{ public_path('images/kirwa-net-mark-160.jpg') }}" alt="" class="brand-logo">
+                        <img src="{{ public_path('images/teto-net-mark-160.jpg') }}" alt="" class="brand-logo">
                         <div class="business">{{ config('app.business_name', config('app.name')) }}</div>
                         <div class="plan-name">{{ $voucher->plan->name }}</div>
                         <div class="duration">{{ $voucher->plan->duration_label }} &bull; ↓{{ $voucher->plan->bandwidth_down }}</div>

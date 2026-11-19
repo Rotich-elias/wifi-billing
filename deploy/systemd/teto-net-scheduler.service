@@ -1,5 +1,5 @@
 [Unit]
-Description=WiFi Billing scheduler (runs schedule:work)
+Description=Teto_Net scheduler (runs schedule:work)
 After=network-online.target
 Wants=network-online.target
 
@@ -7,14 +7,14 @@ Wants=network-online.target
 Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/wifi-billing
+WorkingDirectory=/var/www/teto-net
 ExecStart=/usr/bin/php artisan schedule:work
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM
 TimeoutStopSec=150
-StandardOutput=append:/var/log/wifi-billing/scheduler.log
-StandardError=append:/var/log/wifi-billing/scheduler.log
+StandardOutput=append:/var/log/teto-net/scheduler.log
+StandardError=append:/var/log/teto-net/scheduler.log
 
 [Install]
 WantedBy=multi-user.target

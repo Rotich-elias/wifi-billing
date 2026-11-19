@@ -1,4 +1,4 @@
-# WiFi Billing
+# Teto_Net
 
 Laravel application for selling WiFi hotspot vouchers via M-Pesa (Daraja STK Push),
 provisioning users on MikroTik RouterOS, and optionally sending codes by SMS
@@ -33,11 +33,15 @@ CDN, because a pre-login hotspot client has no internet access yet.
 
 ### Branding
 
-The Kirwa Net mark and lockup live in `public/images/`; favicons, the Apple
-touch icon and `site.webmanifest` are at the root of `public/`. The name shown
-next to the logo comes from `APP_NAME`, and the voucher PDF uses
-`BUSINESS_NAME`. To rebrand, replace those files in place (keep the filenames)
-and update the two environment values.
+Teto_Net uses the parent Teto Technologies identity: teal (`#0F766E`) with an
+amber accent (`#F59E0B`), and Inter / Plus Jakarta Sans fonts bundled in
+`public/fonts/` so pre-login hotspot clients never need internet access.
+
+The mark and lockup are `public/images/teto-net-mark.png`,
+`teto-net-logo.png` and `teto-net-mark-160.jpg`; favicons, the Apple touch icon
+and `site.webmanifest` are at the root of `public/`. Customer-facing text comes
+from `APP_NAME`, `APP_TAGLINE` and `BUSINESS_NAME`; the hotspot name comes from
+`ROUTER_HOTSPOT_SERVER`. Brand assets were sourced from https://teto.co.ke.
 
 The seeder creates the admin account from `ADMIN_EMAIL` / `ADMIN_PASSWORD`. If
 `ADMIN_PASSWORD` is empty it generates one and prints it once.
@@ -153,13 +157,13 @@ Use one of the following, not both:
 
 ```bash
 # Option A: systemd (files in deploy/systemd)
-sudo cp deploy/systemd/wifi-billing-*.service /etc/systemd/system/
+sudo cp deploy/systemd/teto-net-*.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now wifi-billing-queue wifi-billing-scheduler
+sudo systemctl enable --now teto-net-queue teto-net-scheduler
 
 # Option B: cron + Supervisor (files in deploy/cron and deploy/supervisor)
-sudo cp deploy/cron/wifi-billing /etc/cron.d/wifi-billing
-sudo cp deploy/supervisor/wifi-billing.conf /etc/supervisor/conf.d/
+sudo cp deploy/cron/teto-net /etc/cron.d/teto-net
+sudo cp deploy/supervisor/teto-net.conf /etc/supervisor/conf.d/
 sudo supervisorctl reread && sudo supervisorctl update
 
 # Option C: containers (deploy/docker-compose.workers.yml)
@@ -167,7 +171,7 @@ docker compose -f deploy/docker-compose.workers.yml up -d
 ```
 
 The worker and scheduler units use `Restart=always`; the Compose example uses
-`restart: unless-stopped`. Create `/var/log/wifi-billing` and make it writable
+`restart: unless-stopped`. Create `/var/log/teto-net` and make it writable
 by `www-data`.
 
 Scheduled jobs:

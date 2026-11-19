@@ -1,11 +1,11 @@
 {
-    "name": "Kirwa Net",
-    "short_name": "Kirwa Net",
-    "description": "Fast. Reliable. Wi-Fi.",
+    "name": "Teto_Net",
+    "short_name": "Teto_Net",
+    "description": "Fast. Reliable. Connected.",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#0b2e59",
+    "background_color": "#F8FAFC",
+    "theme_color": "#0F766E",
     "icons": [
         {
             "src": "/android-chrome-192x192.png",

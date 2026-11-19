@@ -14,7 +14,7 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        $email = (string) config('app.admin_email', 'admin@wifi.local');
+        $email = (string) config('app.admin_email', 'admin@teto.co.ke');
         $admin = User::where('email', $email)->first();
 
         if ($admin) {

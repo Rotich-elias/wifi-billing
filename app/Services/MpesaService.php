@@ -120,8 +120,8 @@ class MpesaService
                 'PartyB' => $this->shortcode,
                 'PhoneNumber' => $payment->phone,
                 'CallBackURL' => $this->callbackUrl(),
-                'AccountReference' => 'WIFI'.$payment->id,
-                'TransactionDesc' => 'WiFi access',
+                'AccountReference' => 'TETONET'.$payment->id,
+                'TransactionDesc' => 'Teto_Net WiFi',
             ]);
 
         Log::info('M-Pesa STK Push response', [

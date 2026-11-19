@@ -1,5 +1,5 @@
 [Unit]
-Description=WiFi Billing queue worker
+Description=Teto_Net queue worker
 After=network-online.target
 Wants=network-online.target
 
@@ -7,14 +7,14 @@ Wants=network-online.target
 Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/wifi-billing
+WorkingDirectory=/var/www/teto-net
 ExecStart=/usr/bin/php artisan queue:work --sleep=1 --tries=3 --timeout=120 --max-time=3600
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM
 TimeoutStopSec=150
-StandardOutput=append:/var/log/wifi-billing/queue.log
-StandardError=append:/var/log/wifi-billing/queue.log
+StandardOutput=append:/var/log/teto-net/queue.log
+StandardError=append:/var/log/teto-net/queue.log
 
 [Install]
 WantedBy=multi-user.target

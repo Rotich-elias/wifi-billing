@@ -8,7 +8,7 @@
     @include('partials.favicon')
     @vite(['resources/sass/app.scss', 'resources/js/app.js'])
     <style>
-        body { background: linear-gradient(135deg, #071f3f 0%, #0b2e59 60%, #1173b8 100%); min-height: 100vh; }
+        body { background: linear-gradient(135deg, #042F2E 0%, #0F766E 60%, #115E59 100%); min-height: 100vh; }
     </style>
 </head>
 <body class="d-flex align-items-center justify-content-center">
@@ -16,7 +16,7 @@
         <div class="card-body p-5">
             <div class="text-center mb-4">
                 <h1 class="visually-hidden">{{ config('app.name') }} Admin Login</h1>
-                <img src="/images/kirwa-net-logo.png" alt="{{ config('app.name') }} — Fast. Reliable. Wi-Fi."
+                <img src="/images/teto-net-logo.png" alt="{{ config('app.name') }} — {{ config('app.tagline') }}"
                      class="img-fluid mb-3" style="max-width: 175px;">
                 <p class="text-muted small mb-0">Admin Login</p>
             </div>
@@ -34,7 +34,7 @@
                 <div class="mb-3">
                     <label class="form-label fw-semibold small">Email</label>
                     <input type="email" name="email" class="form-control"
-                           value="{{ old('email') }}" placeholder="admin@wifi.local" required autofocus>
+                           value="{{ old('email') }}" placeholder="admin@teto.co.ke" required autofocus>
                 </div>
                 <div class="mb-4">
                     <label class="form-label fw-semibold small">Password</label>

@@ -1,11 +1,11 @@
 ---
-name: project-wifi-billing
-description: WiFi hotspot voucher billing system built with Laravel + MySQL, MikroTik RouterOS API, M-Pesa Daraja STK Push
+name: project-teto-net
+description: Teto_Net — WiFi hotspot voucher billing system built with Laravel + MySQL, MikroTik RouterOS API, M-Pesa Daraja STK Push
 metadata:
   type: project
 ---
 
-Full Laravel 11 application scaffolded at /home/smith/Desktop/wifi-billing.
+Full Laravel application (Teto_Net) scaffolded at /home/smith/Desktop/myproject/teto-net.
 
 **Why:** User requested a complete WiFi hotspot voucher billing system.
 
@@ -19,12 +19,12 @@ Full Laravel 11 application scaffolded at /home/smith/Desktop/wifi-billing.
 - Portal: `resources/views/portal/` (index, pending, status)
 
 **Setup needed:**
-1. Create MySQL DB `wifi_billing`, update `.env` credentials
+1. Create MySQL DB `teto_net`, update `.env` credentials
 2. `php artisan migrate --seed` (seeds admin user + 5 default plans)
 3. Set M-Pesa Daraja keys in `.env`
 4. Set MikroTik IP/credentials in `.env`
 5. Cron: `* * * * * php artisan schedule:run` (expires vouchers every 5 min)
 
-**Admin login:** `admin@wifi.local` — the default password has been rotated. Retrieve the current password from the deployment secret store; never store credentials in this file.
+**Admin login:** `admin@teto.co.ke` — the default password has been rotated. Retrieve the current password from the deployment secret store; never store credentials in this file.
 
 **How to apply:** Reference this when continuing work on this project — migrations, routes, and views are already built.

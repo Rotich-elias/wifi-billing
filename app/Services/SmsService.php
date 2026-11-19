@@ -38,7 +38,7 @@ class SmsService
             'Your WiFi voucher is ready!',
             "Code: {$voucher->code}",
             "Plan: {$plan->name} ({$plan->duration_label})",
-            'Login at the WiFi portal and enter your code.',
+            'Login at the Teto_Net portal and enter your code.',
             "Username & Password: {$voucher->code}",
         ]);
 

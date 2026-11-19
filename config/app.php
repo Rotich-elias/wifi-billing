@@ -13,11 +13,12 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Kirwa Net'),
-    'business_name' => env('BUSINESS_NAME', env('APP_NAME', 'Kirwa Net')),
+    'name' => env('APP_NAME', 'Teto_Net'),
+    'tagline' => env('APP_TAGLINE', 'Fast. Reliable. Connected.'),
+    'business_name' => env('BUSINESS_NAME', env('APP_NAME', 'Teto_Net')),
     'business_phone' => env('BUSINESS_PHONE', ''),
     'business_location' => env('BUSINESS_LOCATION', ''),
-    'admin_email' => env('ADMIN_EMAIL', 'admin@wifi.local'),
+    'admin_email' => env('ADMIN_EMAIL', 'admin@teto.co.ke'),
     'admin_password' => env('ADMIN_PASSWORD'),
 
     /*
